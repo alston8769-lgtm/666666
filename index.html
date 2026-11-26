@@ -1,0 +1,3732 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>承昊的世界 | Cheng-Hao's 3D World</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet">
+
+    <!-- Three.js 0.160.0 ES Module Importmap -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <style>
+        :root {
+            --glass-bg: rgba(255, 252, 247, 0.78);
+            --glass-border: rgba(255, 255, 255, 0.65);
+            --glass-text: #271b14;
+            --glass-sub: rgba(74, 48, 34, 0.72);
+            --glass-shadow: 0 12px 36px rgba(45, 28, 16, 0.16);
+        }
+        body.night-ui {
+            --glass-bg: rgba(15, 23, 42, 0.76);
+            --glass-border: rgba(148, 163, 184, 0.25);
+            --glass-text: #f8fafc;
+            --glass-sub: rgba(203, 213, 225, 0.78);
+            --glass-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+        }
+        * {
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Plus Jakarta Sans', 'Noto Sans TC', sans-serif;
+            background: #1a1625;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        #canvas-wrap {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+        }
+        canvas.webgl-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+
+        /* 精緻毛玻璃面板 */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(18px) saturate(140%);
+            -webkit-backdrop-filter: blur(18px) saturate(140%);
+            border: 1px solid var(--glass-border);
+            color: var(--glass-text);
+            box-shadow: var(--glass-shadow);
+            transition: background 0.5s ease, border-color 0.5s ease, color 0.5s ease, transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease;
+        }
+        .text-sub {
+            color: var(--glass-sub);
+        }
+
+        /* 右側滑出互動抽屜 */
+        #landmark-drawer {
+            transform: translateX(115%);
+            opacity: 0;
+            pointer-events: none;
+            transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.35s ease;
+        }
+        #landmark-drawer.open {
+            transform: translateX(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* 3D 浮動地標牌 */
+        .world-pin {
+            position: absolute;
+            transform: translate(-50%, -100%);
+            padding: 5px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.03em;
+            white-space: nowrap;
+            pointer-events: auto;
+            cursor: pointer;
+            background: rgba(255, 252, 245, 0.88);
+            color: #2c1e16;
+            border: 1px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+            transition: opacity 0.25s ease, transform 0.2s ease, background 0.2s ease;
+        }
+        body.night-ui .world-pin {
+            background: rgba(15, 23, 42, 0.85);
+            color: #f8fafc;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        .world-pin:hover {
+            transform: translate(-50%, -112%) scale(1.06);
+        }
+
+        /* 底部快捷 Dock */
+        .dock-btn {
+            transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .dock-btn:hover {
+            transform: translateY(-3px);
+        }
+        .dock-btn.active {
+            background: linear-gradient(135deg, #f97316, #ea580c);
+            color: #ffffff !important;
+            box-shadow: 0 8px 20px rgba(234, 88, 12, 0.38);
+        }
+
+        /* 隱藏捲軸 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 鋼琴鍵盤樣式 */
+        .piano-wrap {
+            position: relative;
+            height: 112px;
+            display: flex;
+            background: #1e293b;
+            padding: 6px;
+            border-radius: 14px;
+            gap: 2px;
+        }
+        .piano-white {
+            flex: 1;
+            background: linear-gradient(to bottom, #ffffff 0%, #f1f5f9 100%);
+            border-radius: 0 0 6px 6px;
+            position: relative;
+            cursor: pointer;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            box-shadow: inset 0 -3px 0 #cbd5e1;
+            transition: transform 0.06s ease, background 0.08s ease;
+        }
+        .piano-white.pressed, .piano-white:active {
+            background: linear-gradient(to bottom, #fef3c7 0%, #fde68a 100%);
+            transform: translateY(2px);
+            box-shadow: inset 0 -1px 0 #f59e0b;
+            color: #b45309;
+        }
+        .piano-black {
+            position: absolute;
+            top: 6px;
+            width: 7.4%;
+            height: 62px;
+            background: linear-gradient(to bottom, #1e293b 0%, #0f172a 100%);
+            border-radius: 0 0 5px 5px;
+            z-index: 5;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 4px;
+            font-size: 9px;
+            color: #94a3b8;
+            transition: transform 0.06s ease, background 0.08s ease;
+        }
+        .piano-black.pressed, .piano-black:active {
+            background: linear-gradient(to bottom, #f59e0b 0%, #d97706 100%);
+            transform: translateY(2px);
+            color: #fff;
+        }
+
+        /* 投籃力道條動畫 */
+        .shot-bar-track {
+            position: relative;
+            height: 20px;
+            border-radius: 9999px;
+            background: linear-gradient(90deg, #ef4444 0%, #f59e0b 28%, #22c55e 44%, #22c55e 56%, #f59e0b 72%, #ef4444 100%);
+            overflow: hidden;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.25);
+        }
+        .shot-cursor {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 8px;
+            background: #ffffff;
+            border-radius: 9999px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.65);
+            transform: translateX(-50%);
+        }
+
+        /* 歡迎啟動畫面 */
+        #welcome-overlay {
+            background: radial-gradient(circle at 50% 35%, rgba(251, 146, 60, 0.28), rgba(15, 23, 42, 0.92));
+            backdrop-filter: blur(14px);
+            transition: opacity 0.8s ease, visibility 0.8s ease;
+        }
+        #welcome-overlay.hidden-screen {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        /* HUD 隱藏狀態 */
+        .hud-hidden #hud-root {
+            opacity: 0;
+            pointer-events: none;
+        }
+        .hud-hidden #pins-layer {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* 行動端虛擬搖桿 */
+        #mobile-joystick {
+            width: 104px;
+            height: 104px;
+            border-radius: 9999px;
+            background: rgba(255,255,255,0.18);
+            border: 2px solid rgba(255,255,255,0.38);
+            backdrop-filter: blur(8px);
+            position: relative;
+            touch-action: none;
+        }
+        #joystick-knob {
+            width: 44px;
+            height: 44px;
+            border-radius: 9999px;
+            background: rgba(255,255,255,0.88);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        /* 自動導覽字幕條 */
+        #tour-caption {
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+    </style>
+</head>
+<body>
+    <!-- 3D WebGL 畫布容器 -->
+    <div id="canvas-wrap"></div>
+
+    <!-- 3D 浮動地標名稱層 -->
+    <div id="pins-layer" class="fixed inset-0 z-10 pointer-events-none overflow-hidden transition-opacity duration-300"></div>
+
+    <!-- 歡迎進入畫面（同時負責解鎖 Web Audio API） -->
+    <div id="welcome-overlay" class="fixed inset-0 z-50 flex items-center justify-center p-5">
+        <div class="max-w-lg w-full rounded-3xl p-7 sm:p-9 text-center text-white border border-white/20 bg-slate-900/65 shadow-2xl">
+            <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-200 text-xs font-bold tracking-wider mb-4">
+                <span>✨ INTERACTIVE 3D PERSONAL WORLD</span>
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-black tracking-tight bg-gradient-to-r from-amber-200 via-orange-200 to-rose-200 bg-clip-text text-transparent">
+                承昊的 3D 個人世界
+            </h1>
+            <p class="mt-2 text-sm sm:text-base text-slate-300 font-medium">
+                Cheng-Hao's Stylized Island Diorama
+            </p>
+            <p class="mt-4 text-xs sm:text-sm leading-relaxed text-slate-300/90">
+                從新竹的風出發，走進我在台中的生活、勤益資管工作室、夕陽籃球場、海濱平台鋼琴、石橋 Lo-Fi 營地與整張 ETF 財富燈塔。自由漫步，探索 6 個專屬互動彩蛋！
+            </p>
+
+            <div class="mt-5 grid grid-cols-3 gap-2 text-[11px] text-slate-200/90">
+                <div class="rounded-xl bg-white/10 p-2.5 border border-white/10">
+                    <div class="text-base mb-0.5">🎮</div>
+                    <div class="font-bold">WASD / 點地</div>
+                    <div class="text-slate-400">自由移動跳躍</div>
+                </div>
+                <div class="rounded-xl bg-white/10 p-2.5 border border-white/10">
+                    <div class="text-base mb-0.5">🎹🏀📈</div>
+                    <div class="font-bold">6 大互動地標</div>
+                    <div class="text-slate-400">投籃/彈琴/存股</div>
+                </div>
+                <div class="rounded-xl bg-white/10 p-2.5 border border-white/10">
+                    <div class="text-base mb-0.5">🌅✨🌸</div>
+                    <div class="font-bold">4 種大氣光影</div>
+                    <div class="text-slate-400">夕陽/星夜/櫻吹雪</div>
+                </div>
+            </div>
+
+            <button id="btn-enter-world" class="mt-6 w-full py-3.5 px-6 rounded-2xl font-extrabold text-base text-white bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:brightness-110 active:scale-[0.98] transition-all shadow-xl shadow-orange-600/30 flex items-center justify-center gap-2">
+                <span>🚀 進入承昊的世界</span>
+            </button>
+            <p class="mt-3 text-[11px] text-slate-400">點擊進入以啟用 Web Audio 鋼琴與 Lo-Fi 互動音效</p>
+        </div>
+    </div>
+
+    <!-- 隱藏 HUD 時的浮動還原鈕 -->
+    <button id="btn-show-hud" class="fixed top-4 right-4 z-40 hidden px-3.5 py-2 rounded-full glass-panel text-xs font-bold shadow-lg hover:scale-105 transition">
+        👁️ 顯示介面
+    </button>
+
+    <!-- 主 HUD 覆蓋層 -->
+    <div id="hud-root" class="fixed inset-0 z-20 pointer-events-none flex flex-col justify-between p-3 sm:p-5 transition-opacity duration-300">
+
+        <!-- 頂部列 -->
+        <div class="flex flex-wrap items-start justify-between gap-2.5">
+            <!-- 左上角：世界標題 + 彩蛋進度 -->
+            <div class="flex flex-col gap-2 pointer-events-auto">
+                <div class="glass-panel rounded-2xl px-4 py-2.5 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center text-xl shadow-md shrink-0">
+                        🏝️
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h1 class="text-sm sm:text-base font-black tracking-wide leading-tight">承昊的 3D 世界</h1>
+                            <span class="px-1.5 py-0.5 rounded-md bg-orange-500/15 text-orange-600 dark:text-orange-300 text-[10px] font-extrabold">NCUT IM</span>
+                        </div>
+                        <p class="text-[11px] text-sub font-medium mt-0.5">WASD移動 · Shift衝刺 · Space跳躍 · 點地自動走</p>
+                    </div>
+                </div>
+
+                <!-- 彩蛋探索進度條（點擊展開清單） -->
+                <div class="relative">
+                    <button id="btn-quest-toggle" class="glass-panel rounded-2xl px-3.5 py-2 flex items-center gap-2.5 text-xs font-bold hover:brightness-105 active:scale-95 transition">
+                        <span>🏆 探索彩蛋</span>
+                        <span id="egg-counter" class="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[11px] font-black">0 / 6</span>
+                        <div class="w-16 h-1.5 rounded-full bg-black/10 overflow-hidden">
+                            <div id="egg-progress-bar" class="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all duration-500" style="width: 0%"></div>
+                        </div>
+                    </button>
+                    <div id="quest-popover" class="hidden absolute left-0 top-11 w-64 glass-panel rounded-2xl p-3.5 text-xs shadow-2xl z-30">
+                        <div class="font-extrabold mb-2 flex justify-between items-center">
+                            <span>島嶼彩蛋清單</span>
+                            <span class="text-[10px] text-sub">完成全部解鎖稱號</span>
+                        </div>
+                        <ul id="egg-checklist" class="space-y-1.5 text-[11px]"></ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右上角：天氣預設 + 自動導覽 + 音效 + 隱藏UI -->
+            <div class="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 pointer-events-auto">
+                <div class="glass-panel rounded-2xl p-1 flex items-center gap-0.5 sm:gap-1">
+                    <button data-atm="sunset" class="atm-btn px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm">🌅 夕陽</button>
+                    <button data-atm="day" class="atm-btn px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition hover:bg-black/5">☀️ 晴空</button>
+                    <button data-atm="night" class="atm-btn px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition hover:bg-black/5">✨ 星夜</button>
+                    <button data-atm="blossom" class="atm-btn px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition hover:bg-black/5">🌸 櫻吹雪</button>
+                </div>
+
+                <button id="btn-auto-tour" class="glass-panel rounded-2xl px-3 py-2 text-[11px] sm:text-xs font-extrabold hover:scale-105 active:scale-95 transition flex items-center gap-1.5">
+                    <span>🎬</span>
+                    <span id="tour-btn-text">自動導覽</span>
+                </button>
+
+                <button id="btn-mute" title="開關音效" class="glass-panel rounded-2xl p-2 text-sm hover:scale-105 active:scale-95 transition">🔊</button>
+                <button id="btn-hide-hud" title="隱藏介面（簡報/截圖模式）" class="glass-panel rounded-2xl p-2 text-sm hover:scale-105 active:scale-95 transition">📷</button>
+            </div>
+        </div>
+
+        <!-- 自動導覽電影字幕條 -->
+        <div id="tour-caption" class="opacity-0 pointer-events-none mx-auto max-w-xl text-center glass-panel rounded-2xl px-5 py-3 shadow-2xl">
+            <div id="tour-caption-title" class="text-xs font-black text-orange-500 tracking-wider uppercase">AUTO TOUR</div>
+            <div id="tour-caption-text" class="text-sm sm:text-base font-bold mt-0.5">正在瀏覽承昊的個人島嶼...</div>
+        </div>
+
+        <!-- 中右：地標互動抽屜 -->
+        <div class="flex justify-end items-center my-auto relative">
+            <aside id="landmark-drawer" class="glass-panel rounded-3xl p-4 sm:p-5 w-[350px] sm:w-[410px] max-w-[92vw] max-h-[68vh] overflow-y-auto no-scrollbar">
+                <!-- 抽屜標頭 -->
+                <div class="flex items-start justify-between gap-2 pb-3 border-b border-black/10">
+                    <div class="flex items-center gap-3">
+                        <div id="drawer-icon" class="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-2xl shadow-md shrink-0">🏠</div>
+                        <div>
+                            <h2 id="drawer-title" class="text-base sm:text-lg font-black leading-snug">地標名稱</h2>
+                            <p id="drawer-sub" class="text-[11px] font-bold text-sub">Subtitle</p>
+                        </div>
+                    </div>
+                    <button id="btn-close-drawer" class="w-8 h-8 rounded-full bg-black/10 hover:bg-black/20 flex items-center justify-center text-xs font-black transition shrink-0">✕</button>
+                </div>
+
+                <!-- 抽屜動態內容容器 -->
+                <div id="drawer-body" class="mt-3 space-y-3 text-xs sm:text-sm"></div>
+            </aside>
+        </div>
+
+        <!-- 底部區：左下雷達小地圖 / 中下靠近提示+快速導覽 Dock / 右下行動端搖桿 -->
+        <div class="flex items-end justify-between gap-3 w-full">
+            <!-- 左下角：圓形互動雷達小地圖 -->
+            <div class="hidden sm:flex flex-col items-center gap-1.5 pointer-events-auto">
+                <div class="glass-panel p-1.5 rounded-full relative shadow-xl">
+                    <canvas id="minimap-canvas" width="136" height="136" class="rounded-full cursor-pointer block"></canvas>
+                    <div class="absolute top-1.5 left-1/2 -translate-x-1/2 text-[9px] font-black opacity-60 pointer-events-none">N</div>
+                </div>
+                <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full glass-panel">點擊雷達點傳送</span>
+            </div>
+
+            <!-- 中下：靠近互動提示 + 6 大地標快速傳送 Dock -->
+            <div class="flex flex-col items-center gap-2 mx-auto max-w-full">
+                <!-- 靠近地標時的互動提示 -->
+                <button id="proximity-pill" class="hidden pointer-events-auto glass-panel rounded-full px-4 py-1.5 text-xs font-extrabold flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95 transition border border-orange-400/50">
+                    <span class="w-2 h-2 rounded-full bg-orange-500 animate-ping"></span>
+                    <span id="proximity-text">按 E 或點擊進入互動</span>
+                </button>
+
+                <!-- 6 大區域快速導覽列 -->
+                <div class="glass-panel rounded-2xl p-1.5 flex items-center gap-1 pointer-events-auto overflow-x-auto max-w-[94vw] no-scrollbar">
+                    <button data-zone="plaza" class="dock-btn px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap hover:bg-black/5">🧭 風城廣場</button>
+                    <button data-zone="court" class="dock-btn px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap hover:bg-black/5">🏀 夕陽球場</button>
+                    <button data-zone="piano" class="dock-btn px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap hover:bg-black/5">🎹 海濱鋼琴</button>
+                    <button data-zone="studio" class="dock-btn px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap hover:bg-black/5">💻 資管基地</button>
+                    <button data-zone="bridge" class="dock-btn px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap hover:bg-black/5">🌉 石橋音樂</button>
+                    <button data-zone="lighthouse" class="dock-btn px-2.5 sm:px-3 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap hover:bg-black/5">🗼 財富燈塔</button>
+                </div>
+            </div>
+
+            <!-- 右下角：行動裝置虛擬搖桿與跳躍鈕 -->
+            <div class="flex sm:hidden items-end gap-2 pointer-events-auto">
+                <div id="mobile-joystick">
+                    <div id="joystick-knob"></div>
+                </div>
+                <button id="btn-mobile-jump" class="w-12 h-12 rounded-full glass-panel flex items-center justify-center text-lg font-black active:scale-90 transition">⬆️</button>
+            </div>
+
+            <!-- 桌機版右側對稱佔位（維持 Dock 居中） -->
+            <div class="hidden sm:block w-[148px]"></div>
+        </div>
+    </div>
+
+    <!-- 頂部浮動通知 Toast（完全取代 alert） -->
+    <div id="toast-box" class="fixed top-20 left-1/2 -translate-x-1/2 z-40 glass-panel rounded-full px-5 py-2.5 text-xs sm:text-sm font-extrabold shadow-2xl opacity-0 -translate-y-3 pointer-events-none transition-all duration-300 flex items-center gap-2 border border-amber-400/40">
+        <span id="toast-icon">✨</span>
+        <span id="toast-msg">訊息提示</span>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // =========================================================================
+        // 1. 全域常數與個人化六大地標資料
+        // =========================================================================
+        const ZONES = {
+            plaza: {
+                id: 'plaza',
+                name: '風城啟程廣場',
+                en: 'Central Plaza · Hsinchu to Taichung',
+                icon: '🧭',
+                pos: new THREE.Vector3(0, 1.8, 0),
+                standPos: new THREE.Vector3(0, 1.8, 3.6),
+                tourCam: new THREE.Vector3(9, 7.5, 12),
+                color: '#f59e0b',
+                radius: 7.2,
+                caption: '從新竹風城啟程，在台中勤益展開資訊管理、音樂與生活的精彩旅程。'
+            },
+            court: {
+                id: 'court',
+                name: '勤益夕陽籃球場',
+                en: 'Sunset Basketball Court',
+                icon: '🏀',
+                pos: new THREE.Vector3(-17, 2.4, 1),
+                standPos: new THREE.Vector3(-12.5, 2.4, 3.2),
+                tourCam: new THREE.Vector3(-26, 9, 12),
+                color: '#ea580c',
+                radius: 8.5,
+                caption: '下課後灑滿夕陽的籃球場！在這裡挑戰「夕陽投籃計時條」，投出完美空心球。'
+            },
+            piano: {
+                id: 'piano',
+                name: '海濱鋼琴舞台',
+                en: 'Seaside Grand Piano Pavilion',
+                icon: '🎹',
+                pos: new THREE.Vector3(0, 1.65, 26.8),
+                standPos: new THREE.Vector3(0, 1.65, 22.8),
+                tourCam: new THREE.Vector3(10, 6.5, 34),
+                color: '#0ea5e9',
+                radius: 7.8,
+                caption: '延伸入海的平台鋼琴舞台，結合 Yamaha 六級檢定與聽奏專長，歡迎直接彈奏！'
+            },
+            studio: {
+                id: 'studio',
+                name: '資管秘密基地',
+                en: 'Coding Studio & Gaming Den',
+                icon: '💻',
+                pos: new THREE.Vector3(-15, 4.2, -15),
+                standPos: new THREE.Vector3(-11.2, 4.2, -11.5),
+                tourCam: new THREE.Vector3(-6, 10.5, -5.5),
+                color: '#8b5cf6',
+                radius: 8.0,
+                caption: '雙螢幕寫 C# / Python ML / Vue 3 的秘密基地，屋內有 Switch，屋後還藏著 PUBG 空投箱！'
+            },
+            bridge: {
+                id: 'bridge',
+                name: '石橋音樂角',
+                en: 'Stone Bridge & Chill Camp',
+                icon: '🌉',
+                pos: new THREE.Vector3(21, 2.0, 2),
+                standPos: new THREE.Vector3(17.8, 2.0, 2.2),
+                tourCam: new THREE.Vector3(28, 8.5, 12.5),
+                color: '#10b981',
+                radius: 8.2,
+                caption: '跨過瀉湖上的「石橋」，在黑膠唱盤與營火旁聆聽 Gummy B 與高爾宣的 Chill 律動。'
+            },
+            lighthouse: {
+                id: 'lighthouse',
+                name: '整張財富燈塔',
+                en: 'ETF Lighthouse & 5-Min K-Line Deck',
+                icon: '🗼',
+                pos: new THREE.Vector3(15, 6.8, -16),
+                standPos: new THREE.Vector3(11.5, 6.2, -12.5),
+                tourCam: new THREE.Vector3(25, 14.5, -6),
+                color: '#ef4444',
+                radius: 8.0,
+                caption: '島嶼最高點的燈塔與 5 分 K 觀景台！堅持買整張 ETF 不買零股，見證長期複利的光芒。'
+            }
+        };
+
+        const EGGS = {
+            scooter: { label: '🛵 騎上通勤機車（風城廣場）', done: false },
+            basket: { label: '🏀 夕陽球場投進一球', done: false },
+            piano: { label: '🎹 海濱鋼琴彈奏旋律', done: false },
+            airdrop: { label: '📦 拾取基地後方 PUBG 空投', done: false },
+            lofi: { label: '🎧 石橋開啟 Lo-Fi 節奏營火', done: false },
+            etf: { label: '📈 燈塔戰情室買進 1 張 ETF', done: false }
+        };
+
+        // 4 種大氣光影預設
+        const ATMOSPHERES = {
+            sunset: {
+                name: '黃金夕陽',
+                top: new THREE.Color(0x28234a),
+                mid: new THREE.Color(0xb84a62),
+                horizon: new THREE.Color(0xff9e5e),
+                sunColor: new THREE.Color(0xffc97a),
+                sunDir: new THREE.Vector3(-0.75, 0.24, -0.62).normalize(),
+                sunIntensity: 2.3,
+                hemiSky: new THREE.Color(0xffb88c),
+                hemiGround: new THREE.Color(0x4a3447),
+                hemiIntensity: 0.95,
+                fogColor: new THREE.Color(0xe68b6b),
+                fogDensity: 0.0042,
+                oceanShallow: new THREE.Color(0x2d9fa8),
+                oceanDeep: new THREE.Color(0x1b3a63),
+                starIntensity: 0.25,
+                lampPower: 1.5,
+                lighthouseBeam: 0.45,
+                nightUI: false,
+                particleColor: 0xffd27d,
+                particleMode: 'motes'
+            },
+            day: {
+                name: '晴空微風',
+                top: new THREE.Color(0x1d7ed8),
+                mid: new THREE.Color(0x63b8f2),
+                horizon: new THREE.Color(0xcff0ff),
+                sunColor: new THREE.Color(0xfffbe6),
+                sunDir: new THREE.Vector3(0.45, 0.78, 0.42).normalize(),
+                sunIntensity: 2.15,
+                hemiSky: new THREE.Color(0xa6e1ff),
+                hemiGround: new THREE.Color(0x528046),
+                hemiIntensity: 1.05,
+                fogColor: new THREE.Color(0xbce7fa),
+                fogDensity: 0.0032,
+                oceanShallow: new THREE.Color(0x22c8d4),
+                oceanDeep: new THREE.Color(0x0c63a6),
+                starIntensity: 0.0,
+                lampPower: 0.15,
+                lighthouseBeam: 0.05,
+                nightUI: false,
+                particleColor: 0xffffff,
+                particleMode: 'motes'
+            },
+            night: {
+                name: '夢幻星夜',
+                top: new THREE.Color(0x050918),
+                mid: new THREE.Color(0x0f1d3d),
+                horizon: new THREE.Color(0x1f3563),
+                sunColor: new THREE.Color(0xa5c4ff),
+                sunDir: new THREE.Vector3(-0.45, 0.62, -0.65).normalize(),
+                sunIntensity: 0.85,
+                hemiSky: new THREE.Color(0x314a85),
+                hemiGround: new THREE.Color(0x10182b),
+                hemiIntensity: 0.65,
+                fogColor: new THREE.Color(0x142244),
+                fogDensity: 0.0052,
+                oceanShallow: new THREE.Color(0x154f78),
+                oceanDeep: new THREE.Color(0x07152e),
+                starIntensity: 1.0,
+                lampPower: 3.2,
+                lighthouseBeam: 0.95,
+                nightUI: true,
+                particleColor: 0xffe875,
+                particleMode: 'fireflies'
+            },
+            blossom: {
+                name: '風城櫻吹雪',
+                top: new THREE.Color(0x5a4c8a),
+                mid: new THREE.Color(0xe089a8),
+                horizon: new THREE.Color(0xffd7cc),
+                sunColor: new THREE.Color(0xffe1cf),
+                sunDir: new THREE.Vector3(0.55, 0.45, -0.68).normalize(),
+                sunIntensity: 1.95,
+                hemiSky: new THREE.Color(0xffd0df),
+                hemiGround: new THREE.Color(0x5a6e54),
+                hemiIntensity: 1.0,
+                fogColor: new THREE.Color(0xf7c5c6),
+                fogDensity: 0.0044,
+                oceanShallow: new THREE.Color(0x3cb3c4),
+                oceanDeep: new THREE.Color(0x2b5582),
+                starIntensity: 0.08,
+                lampPower: 0.9,
+                lighthouseBeam: 0.25,
+                nightUI: false,
+                particleColor: 0xffb7d5,
+                particleMode: 'petals'
+            }
+        };
+
+        // =========================================================================
+        // 2. 地形高度函數 & 島嶼輪廓 SDF（供地形網格、海洋泡沫、角色碰撞共用）
+        // =========================================================================
+        function islandCoastRadius(angle) {
+            return 28.5
+                + Math.sin(angle * 3.0 + 0.4) * 2.2
+                + Math.cos(angle * 2.0 - 0.8) * 1.8
+                + Math.sin(angle * 5.0) * 0.7;
+        }
+
+        function smoothstep(edge0, edge1, x) {
+            const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+            return t * t * (3 - 2 * t);
+        }
+
+        // 精準地形表面高度
+        function getTerrainHeight(x, z) {
+            const r = Math.hypot(x, z);
+            const ang = Math.atan2(z, x);
+            const coastR = islandCoastRadius(ang);
+
+            // 基礎島嶼輪廓隆起
+            const islandMask = 1.0 - smoothstep(coastR - 7.5, coastR + 1.5, r);
+            let h = -2.2 + islandMask * 4.0;
+
+            // 自然起伏草坡
+            h += (Math.sin(x * 0.14) * Math.cos(z * 0.14) * 0.45) * islandMask;
+
+            // --- 各大地標專屬平坦台地混合 ---
+            // 1. 中央廣場 (0, 0) -> y = 1.8
+            const dPlaza = Math.hypot(x, z);
+            const wPlaza = 1.0 - smoothstep(6.2, 10.5, dPlaza);
+            h = h * (1 - wPlaza) + 1.8 * wPlaza;
+
+            // 2. 西側夕陽籃球場 (-17, 1) -> y = 2.4
+            const dxC = Math.abs(x - (-17)), dzC = Math.abs(z - 1);
+            const dCourt = Math.max(dxC - 4.8, dzC - 6.6);
+            const wCourt = 1.0 - smoothstep(0.0, 4.5, dCourt);
+            h = h * (1 - wCourt) + 2.4 * wCourt;
+
+            // 3. 西北資管秘密基地 (-15, -15) -> y = 4.2
+            const dStudio = Math.hypot(x - (-15), z - (-15));
+            const wStudio = 1.0 - smoothstep(6.2, 11.2, dStudio);
+            h = h * (1 - wStudio) + 4.2 * wStudio;
+
+            // 4. 東北財富燈塔最高峰 (15, -16) -> y = 6.8（平緩爬坡）
+            const dPeak = Math.hypot(x - 15, z - (-16));
+            const wPeak = 1.0 - smoothstep(5.5, 14.5, dPeak);
+            h = h * (1 - wPeak) + 6.8 * wPeak;
+
+            // 5. 東側瀉湖（內陸河道）與石橋東岸半島
+            const dxL = (x - 12.6) / 3.4;
+            const dzL = (z - 2.0) / 8.8;
+            const dLagoon = Math.hypot(dxL, dzL);
+            const wLagoon = 1.0 - smoothstep(0.55, 1.25, dLagoon);
+            h = h * (1 - wLagoon) + (-1.35) * wLagoon;
+
+            // 東岸石橋音樂角半島 (21, 2) -> y = 2.0
+            const dEast = Math.hypot(x - 21.0, z - 2.0);
+            const wEast = 1.0 - smoothstep(5.2, 8.8, dEast);
+            h = h * (1 - wEast) + 2.0 * wEast;
+
+            // 南側海濱棧道入口稍微平緩接海
+            if (z > 15 && Math.abs(x) < 6) {
+                const wSouth = (1 - smoothstep(15, 22, z)) * (1 - smoothstep(3, 6, Math.abs(x)));
+                h = h * (1 - wSouth * 0.5) + 1.55 * (wSouth * 0.5);
+            }
+
+            return h;
+        }
+
+        // 角色實際可行走高度（包含木棧道與石橋拱頂）
+        function getWalkSurface(x, z) {
+            // 南方海濱鋼琴木棧道與舞台
+            if ((Math.abs(x) <= 3.1 && z >= 15.2 && z <= 24.5) ||
+                (Math.abs(x) <= 5.4 && z >= 23.8 && z <= 31.4)) {
+                return { walkable: true, y: 1.68 };
+            }
+            // 東側石橋拱橋面 (x: 8.2 ~ 17.0, z: 0.4 ~ 3.6)
+            if (x >= 8.2 && x <= 17.0 && Math.abs(z - 2.0) <= 1.7) {
+                const t = (x - 8.2) / (17.0 - 8.2); // 0..1
+                const archY = 1.85 + Math.sin(t * Math.PI) * 1.45;
+                return { walkable: true, y: archY };
+            }
+            // 一般陸地
+            const h = getTerrainHeight(x, z);
+            return { walkable: h > 0.22, y: h };
+        }
+
+        // =========================================================================
+        // 3. Web Audio 音訊引擎（鋼琴合成 + Lo-Fi 節奏機 + 投籃/彩蛋音效）
+        // =========================================================================
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+                this.lofiPlaying = false;
+                this.lofiTimer = null;
+                this.lofiStep = 0;
+                this.lofiStyle = 'stonebridge';
+                this.beatEnergy = 0;
+            }
+            init() {
+                try {
+                    if (!this.ctx) {
+                        const AC = window.AudioContext || window.webkitAudioContext;
+                        this.ctx = new AC();
+                    }
+                    if (this.ctx.state === 'suspended') this.ctx.resume();
+                } catch (e) { /* ignore */ }
+            }
+            // 溫暖的平台鋼琴合成音色
+            playPianoNote(freq, duration = 1.35, volume = 0.22) {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const master = this.ctx.createGain();
+                master.gain.setValueAtTime(0.001, now);
+                master.gain.linearRampToValueAtTime(volume, now + 0.014);
+                master.gain.exponentialRampToValueAtTime(volume * 0.35, now + 0.25);
+                master.gain.exponentialRampToValueAtTime(0.0008, now + duration);
+
+                // 基音 + 溫暖泛音
+                const osc1 = this.ctx.createOscillator();
+                osc1.type = 'triangle';
+                osc1.frequency.setValueAtTime(freq, now);
+
+                const osc2 = this.ctx.createOscillator();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(freq * 2, now);
+                const g2 = this.ctx.createGain();
+                g2.gain.setValueAtTime(0.28, now);
+                g2.gain.exponentialRampToValueAtTime(0.01, now + duration * 0.6);
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(2400, now);
+                filter.frequency.exponentialRampToValueAtTime(650, now + duration);
+
+                osc1.connect(filter);
+                osc2.connect(g2);
+                g2.connect(filter);
+                filter.connect(master);
+                master.connect(this.ctx.destination);
+
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + duration + 0.05);
+                osc2.stop(now + duration + 0.05);
+            }
+            // 投籃進球刷網聲
+            playSwish() {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                // 白噪音濾波模擬刷網
+                const bufSize = this.ctx.sampleRate * 0.22;
+                const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+                const data = buf.getChannelData(0);
+                for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.35));
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buf;
+                const bp = this.ctx.createBiquadFilter();
+                bp.type = 'bandpass';
+                bp.frequency.setValueAtTime(2200, now);
+                const g = this.ctx.createGain();
+                g.gain.setValueAtTime(0.32, now);
+                noise.connect(bp);
+                bp.connect(g);
+                g.connect(this.ctx.destination);
+                noise.start(now);
+                // 附帶悅耳得分和弦
+                this.playPianoNote(523.25, 0.5, 0.14);
+                setTimeout(() => this.playPianoNote(659.25, 0.5, 0.14), 70);
+                setTimeout(() => this.playPianoNote(783.99, 0.7, 0.16), 140);
+            }
+            // 籃球打鐵反彈聲
+            playBounce() {
+                if (this.muted) return;
+                this.init();
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(190, now);
+                osc.frequency.exponentialRampToValueAtTime(62, now + 0.14);
+                const g = this.ctx.createGain();
+                g.gain.setValueAtTime(0.3, now);
+                g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+                osc.connect(g);
+                g.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + 0.17);
+            }
+            // 彩蛋解鎖音效
+            playChime() {
+                if (this.muted) return;
+                this.init();
+                const freqs = [523.25, 659.25, 783.99, 1046.5];
+                freqs.forEach((f, i) => setTimeout(() => this.playPianoNote(f, 0.85, 0.14), i * 85));
+            }
+            // Lo-Fi 節奏機循環
+            toggleLoFi(forceState) {
+                const next = typeof forceState === 'boolean' ? forceState : !this.lofiPlaying;
+                this.lofiPlaying = next;
+                if (this.lofiTimer) {
+                    clearInterval(this.lofiTimer);
+                    this.lofiTimer = null;
+                }
+                if (this.lofiPlaying) {
+                    this.init();
+                    this.lofiStep = 0;
+                    const stepMs = 285; // ~105 BPM Chill Boom-Bap
+                    this.runLoFiStep();
+                    this.lofiTimer = setInterval(() => this.runLoFiStep(), stepMs);
+                }
+                return this.lofiPlaying;
+            }
+            runLoFiStep() {
+                if (!this.lofiPlaying || this.muted || !this.ctx) return;
+                const s = this.lofiStep % 16;
+                const now = this.ctx.currentTime;
+
+                // Kick (拍點 0, 6, 8, 14)
+                if (s === 0 || s === 6 || s === 8 || (this.lofiStyle === 'stonebridge' && s === 14)) {
+                    const osc = this.ctx.createOscillator();
+                    const g = this.ctx.createGain();
+                    osc.frequency.setValueAtTime(125, now);
+                    osc.frequency.exponentialRampToValueAtTime(42, now + 0.13);
+                    g.gain.setValueAtTime(0.32, now);
+                    g.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+                    osc.connect(g); g.connect(this.ctx.destination);
+                    osc.start(now); osc.stop(now + 0.19);
+                    this.beatEnergy = 1.0;
+                }
+                // Soft Snare (拍點 4, 12)
+                if (s === 4 || s === 12) {
+                    const bufSize = Math.floor(this.ctx.sampleRate * 0.11);
+                    const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+                    const d = buf.getChannelData(0);
+                    for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.25));
+                    const src = this.ctx.createBufferSource();
+                    src.buffer = buf;
+                    const lp = this.ctx.createBiquadFilter();
+                    lp.type = 'lowpass'; lp.frequency.value = 1800;
+                    const g = this.ctx.createGain();
+                    g.gain.setValueAtTime(0.18, now);
+                    src.connect(lp); lp.connect(g); g.connect(this.ctx.destination);
+                    src.start(now);
+                    this.beatEnergy = Math.max(this.beatEnergy, 0.8);
+                }
+                // Hi-Hat (偶數拍)
+                if (s % 2 === 0) {
+                    const bufSize = Math.floor(this.ctx.sampleRate * 0.035);
+                    const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+                    const d = buf.getChannelData(0);
+                    for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.2));
+                    const src = this.ctx.createBufferSource();
+                    src.buffer = buf;
+                    const hp = this.ctx.createBiquadFilter();
+                    hp.type = 'highpass'; hp.frequency.value = 6000;
+                    const g = this.ctx.createGain();
+                    g.gain.setValueAtTime(0.055, now);
+                    src.connect(hp); hp.connect(g); g.connect(this.ctx.destination);
+                    src.start(now);
+                }
+                // Warm Rhodes Jazz Chords (每 8 拍換和弦)
+                if (s === 0 || s === 8) {
+                    const prog = this.lofiStyle === 'stonebridge'
+                        ? [[220.0, 261.63, 329.63, 392.0], [174.61, 220.0, 261.63, 329.63], [196.0, 246.94, 293.66, 392.0], [164.81, 196.0, 246.94, 329.63]]
+                        : [[261.63, 329.63, 392.0, 493.88], [220.0, 261.63, 329.63, 440.0], [174.61, 220.0, 261.63, 349.23], [196.0, 246.94, 329.63, 392.0]];
+                    const chordIdx = Math.floor(this.lofiStep / 8) % prog.length;
+                    prog[chordIdx].forEach((freq, idx) => {
+                        setTimeout(() => this.playPianoNote(freq, 2.0, 0.085), idx * 24);
+                    });
+                }
+                this.lofiStep++;
+            }
+        }
+        const sound = new SoundEngine();
+
+        // =========================================================================
+        // 4. Three.js 核心狀態變數
+        // =========================================================================
+        let scene, camera, renderer, controls, clock;
+        let skyUniforms, oceanUniforms, terrainMesh, walkRayMeshes = [];
+        let sunLight, hemiLight;
+        let currentAtmKey = 'sunset';
+
+        // 動態物件集合
+        const pointLamps = [];
+        const clouds = [];
+        const swayTrees = [];
+        const ambientParticlesData = [];
+        let ambientParticlesMesh;
+        const dustPuffs = [];
+        const noteParticles = [];
+        const emberParticles = [];
+        const smokeParticles = [];
+        const burstParticles = [];
+        let clickRippleMesh = null, clickRippleTime = 99;
+
+        // 特定地標可動畫部件
+        let vinylPlatter, eqBars = [], lighthouseBeamGroup, lighthouseBeamMat;
+        let neuralNetGroup, airdropCrateGroup, scooterGroup;
+        let hoopNetMesh, shotBallMesh, shotBallState = { active: false, t: 0, start: new THREE.Vector3(), target: new THREE.Vector3(), willScore: true };
+
+        // 角色與物理
+        let playerGroup, playerRig = {};
+        const playerPos = new THREE.Vector3(0, 1.8, 4.2);
+        let playerVelY = 0;
+        let isGrounded = true;
+        let playerRotY = Math.PI;
+        const keys = {};
+        let autoWalkTarget = null;
+        const mobileInput = { x: 0, y: 0 };
+
+        // 互動與導覽狀態
+        let currentNearZone = null;
+        let openDrawerZone = null;
+        let autoTourActive = false;
+        let tourIndex = 0;
+        let tourTimer = 0;
+        const tourKeys = ['plaza', 'court', 'piano', 'studio', 'bridge', 'lighthouse'];
+        const raycaster = new THREE.Raycaster();
+        const pointer = new THREE.Vector2();
+        let pointerDownPos = { x: 0, y: 0 };
+
+        // =========================================================================
+        // 5. 初始化場景與主建造流程
+        // =========================================================================
+        function initWorld() {
+            const wrap = document.getElementById('canvas-wrap');
+            clock = new THREE.Clock();
+
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(ATMOSPHERES.sunset.fogColor.getHex(), ATMOSPHERES.sunset.fogDensity);
+
+            camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.2, 500);
+            camera.position.set(11, 10, 18);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.08;
+            renderer.domElement.classList.add('webgl-canvas');
+            wrap.appendChild(renderer.domElement);
+
+            // OrbitControls 圍繞主角平滑運鏡
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.07;
+            controls.enablePan = false;
+            controls.minDistance = 6.5;
+            controls.maxDistance = 42;
+            controls.maxPolarAngle = Math.PI * 0.46;
+            controls.minPolarAngle = 0.18;
+            controls.target.set(playerPos.x, playerPos.y + 1.4, playerPos.z);
+
+            // 光源系統
+            const initAtm = ATMOSPHERES.sunset;
+            hemiLight = new THREE.HemisphereLight(initAtm.hemiSky, initAtm.hemiGround, initAtm.hemiIntensity);
+            scene.add(hemiLight);
+
+            sunLight = new THREE.DirectionalLight(initAtm.sunColor, initAtm.sunIntensity);
+            sunLight.position.copy(initAtm.sunDir).multiplyScalar(70);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.set(2048, 2048);
+            sunLight.shadow.camera.near = 10;
+            sunLight.shadow.camera.far = 170;
+            const sd = 40;
+            sunLight.shadow.camera.left = -sd;
+            sunLight.shadow.camera.right = sd;
+            sunLight.shadow.camera.top = sd;
+            sunLight.shadow.camera.bottom = -sd;
+            sunLight.shadow.bias = -0.0005;
+            scene.add(sunLight);
+
+            // 建造世界各層
+            buildSkyDome();
+            buildStylizedOcean();
+            buildSculptedTerrain();
+            buildCobblestonePaths();
+            buildPlazaLandmark();
+            buildBasketballCourtLandmark();
+            buildPianoPierLandmark();
+            buildStudioLandmark();
+            buildStoneBridgeLandmark();
+            buildLighthouseLandmark();
+            buildFoliageAndDecor();
+            buildClouds();
+            buildAmbientParticles();
+            buildClickRipple();
+            buildPlayerAvatar();
+            buildWorldPins();
+
+            // 綁定 UI 與鍵盤滑鼠事件
+            bindAllEvents();
+            updateEggChecklistUI();
+
+            // 啟動主迴圈
+            animate();
+        }
+
+        // =========================================================================
+        // 6. 自訂 GLSL 大氣天空穹頂 & 風格化海洋
+        // =========================================================================
+        function buildSkyDome() {
+            const atm = ATMOSPHERES.sunset;
+            skyUniforms = {
+                uTopColor: { value: atm.top.clone() },
+                uMidColor: { value: atm.mid.clone() },
+                uHorizonColor: { value: atm.horizon.clone() },
+                uSunDir: { value: atm.sunDir.clone() },
+                uSunColor: { value: atm.sunColor.clone() },
+                uStarIntensity: { value: atm.starIntensity },
+                uTime: { value: 0 }
+            };
+
+            const skyMat = new THREE.ShaderMaterial({
+                uniforms: skyUniforms,
+                side: THREE.BackSide,
+                depthWrite: false,
+                vertexShader: `
+                    varying vec3 vWorldDir;
+                    void main() {
+                        vec4 wp = modelMatrix * vec4(position, 1.0);
+                        vWorldDir = normalize(position);
+                        gl_Position = projectionMatrix * viewMatrix * wp;
+                    }
+                `,
+                fragmentShader: `
+                    uniform vec3 uTopColor;
+                    uniform vec3 uMidColor;
+                    uniform vec3 uHorizonColor;
+                    uniform vec3 uSunDir;
+                    uniform vec3 uSunColor;
+                    uniform float uStarIntensity;
+                    uniform float uTime;
+                    varying vec3 vWorldDir;
+
+                    float hash(vec3 p) {
+                        p = fract(p * 0.3183099 + 0.1);
+                        p *= 17.0;
+                        return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+                    }
+
+                    void main() {
+                        vec3 dir = normalize(vWorldDir);
+                        float h = clamp(dir.y, 0.0, 1.0);
+
+                        // 三段式新海誠大氣漸層
+                        vec3 col = mix(uHorizonColor, uMidColor, smoothstep(0.0, 0.28, h));
+                        col = mix(col, uTopColor, smoothstep(0.22, 0.85, h));
+
+                        // 太陽 / 月亮光暈與圓盤
+                        float sunDot = max(dot(dir, normalize(uSunDir)), 0.0);
+                        float halo = pow(sunDot, 7.0) * 0.45 + pow(sunDot, 42.0) * 0.55;
+                        float disc = smoothstep(0.9965, 0.9985, sunDot);
+                        col += uSunColor * halo + vec3(1.0, 0.98, 0.92) * disc * 1.15;
+
+                        // 地平線柔霧光帶
+                        float horizonGlow = pow(1.0 - h, 6.0) * 0.25;
+                        col += uHorizonColor * horizonGlow;
+
+                        // 程式化閃爍星空
+                        if (uStarIntensity > 0.01 && h > 0.05) {
+                            vec3 starGrid = floor(dir * 210.0);
+                            float r = hash(starGrid);
+                            if (r > 0.992) {
+                                float twinkle = 0.55 + 0.45 * sin(uTime * 2.8 + r * 90.0);
+                                float starBright = smoothstep(0.05, 0.25, h) * twinkle * uStarIntensity;
+                                col += vec3(0.95, 0.97, 1.0) * starBright * 1.1;
+                            }
+                        }
+
+                        gl_FragColor = vec4(col, 1.0);
+                    }
+                `
+            });
+
+            const skyDome = new THREE.Mesh(new THREE.SphereGeometry(280, 32, 24), skyMat);
+            scene.add(skyDome);
+        }
+
+        function buildStylizedOcean() {
+            const atm = ATMOSPHERES.sunset;
+            oceanUniforms = {
+                uTime: { value: 0 },
+                uShallowColor: { value: atm.oceanShallow.clone() },
+                uDeepColor: { value: atm.oceanDeep.clone() },
+                uSunDir: { value: atm.sunDir.clone() },
+                uSunColor: { value: atm.sunColor.clone() },
+                uFogColor: { value: atm.fogColor.clone() },
+                uFogDensity: { value: atm.fogDensity }
+            };
+
+            const oceanGeo = new THREE.PlaneGeometry(420, 420, 110, 110);
+            oceanGeo.rotateX(-Math.PI / 2);
+
+            const oceanMat = new THREE.ShaderMaterial({
+                uniforms: oceanUniforms,
+                transparent: true,
+                vertexShader: `
+                    uniform float uTime;
+                    varying vec3 vWorldPos;
+                    varying float vWave;
+                    void main() {
+                        vec3 pos = position;
+                        float w1 = sin(pos.x * 0.14 + uTime * 1.35) * 0.14;
+                        float w2 = cos(pos.z * 0.12 + uTime * 1.1) * 0.12;
+                        float w3 = sin((pos.x + pos.z) * 0.22 - uTime * 1.7) * 0.06;
+                        pos.y += w1 + w2 + w3;
+                        vWave = w1 + w2 + w3;
+                        vec4 wp = modelMatrix * vec4(pos, 1.0);
+                        vWorldPos = wp.xyz;
+                        gl_Position = projectionMatrix * viewMatrix * wp;
+                    }
+                `,
+                fragmentShader: `
+                    uniform float uTime;
+                    uniform vec3 uShallowColor;
+                    uniform vec3 uDeepColor;
+                    uniform vec3 uSunDir;
+                    uniform vec3 uSunColor;
+                    uniform vec3 uFogColor;
+                    uniform float uFogDensity;
+                    varying vec3 vWorldPos;
+                    varying float vWave;
+
+                    float coastRadius(float a) {
+                        return 28.5 + sin(a * 3.0 + 0.4) * 2.2 + cos(a * 2.0 - 0.8) * 1.8 + sin(a * 5.0) * 0.7;
+                    }
+
+                    void main() {
+                        float r = length(vWorldPos.xz);
+                        float ang = atan(vWorldPos.z, vWorldPos.x);
+                        float cr = coastRadius(ang);
+
+                        // 海岸線距離 & 瀉湖內海判定
+                        float distCoast = r - cr;
+                        float depthT = smoothstep(-2.0, 26.0, distCoast);
+                        vec3 waterCol = mix(uShallowColor, uDeepColor, depthT);
+
+                        // 風格化水面波紋亮紋
+                        float ripple = sin(vWorldPos.x * 0.55 + uTime * 1.8) * cos(vWorldPos.z * 0.55 - uTime * 1.4);
+                        waterCol += vec3(0.06, 0.11, 0.12) * smoothstep(0.35, 0.9, ripple + vWave);
+
+                        // 動態海岸線白色泡沫圈
+                        float foamWave = sin(distCoast * 2.2 - uTime * 2.6) * 0.5 + 0.5;
+                        float coastFoam = (1.0 - smoothstep(-2.5, 2.2, abs(distCoast + 1.2))) * smoothstep(0.25, 0.75, foamWave + 0.2);
+                        waterCol = mix(waterCol, vec3(0.95, 0.98, 1.0), coastFoam * 0.72);
+
+                        // 陽光水面鏡面閃耀光點
+                        vec3 viewDir = normalize(cameraPosition - vWorldPos);
+                        vec3 normal = normalize(vec3(
+                            cos(vWorldPos.x * 0.35 + uTime * 1.4) * 0.08,
+                            1.0,
+                            sin(vWorldPos.z * 0.35 + uTime * 1.2) * 0.08
+                        ));
+                        vec3 halfV = normalize(normalize(uSunDir) + viewDir);
+                        float spec = pow(max(dot(normal, halfV), 0.0), 96.0);
+                        waterCol += uSunColor * spec * 1.35;
+
+                        // 距離指數霧化融合地平線
+                        float distCam = length(cameraPosition - vWorldPos);
+                        float fogFactor = 1.0 - exp(-pow(distCam * uFogDensity, 2.0));
+                        waterCol = mix(waterCol, uFogColor, clamp(fogFactor, 0.0, 1.0));
+
+                        gl_FragColor = vec4(waterCol, 0.93);
+                    }
+                `
+            });
+
+            const ocean = new THREE.Mesh(oceanGeo, oceanMat);
+            ocean.position.y = 0.0;
+            scene.add(ocean);
+        }
+
+        // =========================================================================
+        // 7. 連續多層次雕塑地形（頂點著色 + 細膩陰影）
+        // =========================================================================
+        function buildSculptedTerrain() {
+            const geo = new THREE.PlaneGeometry(82, 82, 128, 128);
+            geo.rotateX(-Math.PI / 2);
+
+            const pos = geo.attributes.position;
+            const colors = new Float32Array(pos.count * 3);
+
+            const colSand = new THREE.Color(0xf2d6a2);
+            const colGrassLow = new THREE.Color(0x63b868);
+            const colGrassHigh = new THREE.Color(0x4b9e59);
+            const colCliff = new THREE.Color(0x8c8173);
+            const colLagoonBed = new THREE.Color(0x3ba8ad);
+
+            for (let i = 0; i < pos.count; i++) {
+                const x = pos.getX(i);
+                const z = pos.getZ(i);
+                const y = getTerrainHeight(x, z);
+                pos.setY(i, y);
+
+                // 計算局部斜率做岩石崖壁著色
+                const hx = getTerrainHeight(x + 0.6, z);
+                const hz = getTerrainHeight(x, z + 0.6);
+                const slope = Math.hypot(hx - y, hz - y);
+
+                let c = new THREE.Color();
+                if (y < -0.35) {
+                    c.copy(colLagoonBed);
+                } else if (y < 0.72) {
+                    c.copy(colSand).lerp(colGrassLow, smoothstep(0.28, 0.72, y));
+                } else {
+                    c.copy(colGrassLow).lerp(colGrassHigh, smoothstep(1.8, 6.2, y));
+                    // 加入微妙的手繪草地色差變化
+                    const tint = Math.sin(x * 0.25) * Math.cos(z * 0.25) * 0.05;
+                    c.offsetHSL(tint * 0.3, 0, tint);
+                }
+                if (slope > 0.34 && y > 0.8) {
+                    c.lerp(colCliff, Math.min(1, (slope - 0.34) * 2.5));
+                }
+
+                colors[i * 3] = c.r;
+                colors[i * 3 + 1] = c.g;
+                colors[i * 3 + 2] = c.b;
+            }
+
+            geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geo.computeVertexNormals();
+
+            const mat = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                roughness: 0.88,
+                metalness: 0.02,
+                flatShading: true
+            });
+
+            terrainMesh = new THREE.Mesh(geo, mat);
+            terrainMesh.receiveShadow = true;
+            terrainMesh.castShadow = true;
+            scene.add(terrainMesh);
+            walkRayMeshes.push(terrainMesh);
+        }
+
+        // 連結所有地標的蜿蜒鵝卵石小徑
+        function buildCobblestonePaths() {
+            const stoneMat = new THREE.MeshStandardMaterial({ color: 0xe6dac5, roughness: 0.9, flatShading: true });
+            const stoneGeo = new THREE.CylinderGeometry(0.68, 0.78, 0.14, 7);
+
+            const drawCurvePath = (pts, stepCount) => {
+                const curve = new THREE.CatmullRomCurve3(pts.map(([x, z]) => new THREE.Vector3(x, 0, z)));
+                for (let i = 0; i <= stepCount; i++) {
+                    const p = curve.getPoint(i / stepCount);
+                    const y = getTerrainHeight(p.x, p.z);
+                    if (y < 0.35) continue;
+                    const s = new THREE.Mesh(stoneGeo, stoneMat);
+                    s.position.set(p.x, y + 0.02, p.z);
+                    s.rotation.y = Math.random() * Math.PI;
+                    const sc = 0.85 + Math.random() * 0.35;
+                    s.scale.set(sc, 1, sc * 0.88);
+                    s.receiveShadow = true;
+                    scene.add(s);
+                }
+            };
+
+            // 中央廣場 -> 各大地標
+            drawCurvePath([[0, 0], [-6, 0.5], [-11.5, 1]], 10); // 往籃球場
+            drawCurvePath([[0, 0], [0, 8], [0, 15.2]], 11);     // 往海濱鋼琴棧道
+            drawCurvePath([[0, 0], [-5.5, -5.5], [-11, -11]], 11); // 往資管基地
+            drawCurvePath([[0, 0], [4.5, 1.2], [8.2, 2.0]], 7); // 往石橋
+            drawCurvePath([[0, 0], [5.5, -5.5], [10.5, -11.5]], 12); // 往財富燈塔
+        }
+
+        // 輔助函式：建立溫暖木頭路燈
+        function createLantern(x, z) {
+            const y = getTerrainHeight(x, z);
+            const g = new THREE.Group();
+            g.position.set(x, y, z);
+
+            const post = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.08, 0.11, 2.8, 6),
+                new THREE.MeshStandardMaterial({ color: 0x5d4037, flatShading: true })
+            );
+            post.position.y = 1.4;
+            post.castShadow = true;
+            g.add(post);
+
+            const cap = new THREE.Mesh(
+                new THREE.ConeGeometry(0.38, 0.28, 6),
+                new THREE.MeshStandardMaterial({ color: 0x3e2723, flatShading: true })
+            );
+            cap.position.y = 2.95;
+            g.add(cap);
+
+            const glass = new THREE.Mesh(
+                new THREE.OctahedronGeometry(0.22, 0),
+                new THREE.MeshStandardMaterial({ color: 0xfff3c4, emissive: 0xffb74d, emissiveIntensity: 1.5 })
+            );
+            glass.position.y = 2.65;
+            g.add(glass);
+
+            const light = new THREE.PointLight(0xffb74d, ATMOSPHERES.sunset.lampPower, 11);
+            light.position.set(0, 2.6, 0);
+            g.add(light);
+            pointLamps.push(light);
+
+            scene.add(g);
+        }
+
+        // =========================================================================
+        // 8. 六大精細個人地標建模
+        // =========================================================================
+
+        // --- 地標 1：【風城啟程廣場・Central Plaza】 ---
+        function buildPlazaLandmark() {
+            const g = new THREE.Group();
+            g.position.set(0, 1.8, 0);
+
+            // 石磚圓形廣場地板 + 羅盤玫瑰紋理
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 512;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#e8dcc8';
+            ctx.fillRect(0, 0, 512, 512);
+            // 同心圓石磚環
+            ctx.strokeStyle = '#c4b195';
+            ctx.lineWidth = 8;
+            [240, 185, 110].forEach(r => { ctx.beginPath(); ctx.arc(256, 256, r, 0, Math.PI * 2); ctx.stroke(); });
+            // 羅盤八芒星
+            ctx.fillStyle = '#d97706';
+            for (let i = 0; i < 8; i++) {
+                ctx.save();
+                ctx.translate(256, 256);
+                ctx.rotate((i * Math.PI) / 4);
+                ctx.beginPath();
+                ctx.moveTo(0, i % 2 === 0 ? -155 : -105);
+                ctx.lineTo(18, 0);
+                ctx.lineTo(-18, 0);
+                ctx.closePath();
+                ctx.fillStyle = i % 2 === 0 ? '#c2410c' : '#d97706';
+                ctx.fill();
+                ctx.restore();
+            }
+            ctx.fillStyle = '#fef3c7';
+            ctx.beginPath(); ctx.arc(256, 256, 36, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#78350f';
+            ctx.font = 'bold 26px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('CH', 256, 256);
+
+            const plazaTex = new THREE.CanvasTexture(c);
+            const plazaDisc = new THREE.Mesh(
+                new THREE.CylinderGeometry(5.8, 6.1, 0.16, 32),
+                new THREE.MeshStandardMaterial({ map: plazaTex, roughness: 0.85 })
+            );
+            plazaDisc.position.y = 0.05;
+            plazaDisc.receiveShadow = true;
+            g.add(plazaDisc);
+            walkRayMeshes.push(plazaDisc);
+
+            // 鄉村木造多方向路標（指向新竹/勤益/鋼琴/球場/燈塔）
+            const signGroup = new THREE.Group();
+            signGroup.position.set(-2.9, 0.1, -2.5);
+            const woodMat = new THREE.MeshStandardMaterial({ color: 0x7c5338, flatShading: true });
+            const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 3.8, 7), woodMat);
+            post.position.y = 1.9;
+            post.castShadow = true;
+            signGroup.add(post);
+
+            const boardDefs = [
+                { y: 3.35, rot: 0.35, col: '#f59e0b', txt: '新竹・風城' },
+                { y: 2.85, rot: -0.6, col: '#8b5cf6', txt: '台中・勤益' },
+                { y: 2.35, rot: 1.55, col: '#0ea5e9', txt: '海濱鋼琴' },
+                { y: 1.85, rot: -1.4, col: '#ea580c', txt: '夕陽球場' },
+                { y: 1.35, rot: 0.9, col: '#ef4444', txt: '財富燈塔' }
+            ];
+            boardDefs.forEach(b => {
+                const bc = document.createElement('canvas');
+                bc.width = 256; bc.height = 64;
+                const bctx = bc.getContext('2d');
+                bctx.fillStyle = '#5c3c24';
+                bctx.fillRect(0, 0, 256, 64);
+                bctx.fillStyle = b.col;
+                bctx.fillRect(0, 0, 14, 64);
+                bctx.fillStyle = '#fffbeb';
+                bctx.font = 'bold 30px Noto Sans TC, sans-serif';
+                bctx.textAlign = 'center';
+                bctx.textBaseline = 'middle';
+                bctx.fillText(b.txt, 134, 34);
+                const bTex = new THREE.CanvasTexture(bc);
+                const board = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.75, 0.4, 0.09),
+                    new THREE.MeshStandardMaterial({ map: bTex })
+                );
+                board.position.set(Math.cos(b.rot) * 0.55, b.y, -Math.sin(b.rot) * 0.55);
+                board.rotation.y = b.rot;
+                board.castShadow = true;
+                signGroup.add(board);
+            });
+            g.add(signGroup);
+
+            // 停放的可愛 3D 通勤機車（致敬台中外派鋼琴家教 30 分鐘通勤！）
+            scooterGroup = new THREE.Group();
+            scooterGroup.position.set(3.2, 0.14, -1.6);
+            scooterGroup.rotation.y = -0.75;
+            scooterGroup.userData.interactable = 'scooter';
+
+            const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.35, metalness: 0.25 });
+            const tireMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 });
+            const chromeMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.7, roughness: 0.25 });
+            const seatMat = new THREE.MeshStandardMaterial({ color: 0x3f2e21, roughness: 0.8 });
+
+            // 前後輪
+            [-0.78, 0.78].forEach(zOff => {
+                const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.12, 8, 16), tireMat);
+                wheel.rotation.y = Math.PI / 2;
+                wheel.position.set(0, 0.34, zOff);
+                wheel.castShadow = true;
+                scooterGroup.add(wheel);
+            });
+            // 車身底板與後殼
+            const deck = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.16, 1.15), bodyMat);
+            deck.position.set(0, 0.42, 0.05);
+            const rearBody = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.46, 0.95), bodyMat);
+            rearBody.position.set(0, 0.68, -0.45);
+            rearBody.castShadow = true;
+            // 坐墊
+            const seat = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.18, 0.92), seatMat);
+            seat.position.set(0, 0.96, -0.42);
+            // 前斜板與龍頭
+            const frontShield = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.95, 0.28), bodyMat);
+            frontShield.position.set(0, 0.85, 0.62);
+            frontShield.rotation.x = -0.22;
+            frontShield.castShadow = true;
+            const handleBar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.95, 8), chromeMat);
+            handleBar.rotation.z = Math.PI / 2;
+            handleBar.position.set(0, 1.32, 0.56);
+            // 頭燈
+            const headlight = new THREE.Mesh(
+                new THREE.SphereGeometry(0.14, 10, 10),
+                new THREE.MeshStandardMaterial({ color: 0xfff9db, emissive: 0xffd54f, emissiveIntensity: 1.4 })
+            );
+            headlight.position.set(0, 1.24, 0.72);
+            // 尾燈與車牌
+            const taillight = new THREE.Mesh(
+                new THREE.BoxGeometry(0.24, 0.1, 0.06),
+                new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xef4444, emissiveIntensity: 1.0 })
+            );
+            taillight.position.set(0, 0.82, -0.94);
+
+            scooterGroup.add(deck, rearBody, seat, frontShield, handleBar, headlight, taillight);
+            scooterGroup.traverse(o => { o.userData.interactable = 'scooter'; });
+            g.add(scooterGroup);
+
+            // 廣場迎賓木拱門
+            const archMat = new THREE.MeshStandardMaterial({ color: 0x8d5b3c, flatShading: true });
+            const pL = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 3.8, 7), archMat);
+            pL.position.set(-2.6, 1.9, -4.6);
+            const pR = pL.clone();
+            pR.position.x = 2.6;
+            const beam = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.45, 0.32), archMat);
+            beam.position.set(0, 3.7, -4.6);
+            beam.castShadow = true;
+
+            const bannerC = document.createElement('canvas');
+            bannerC.width = 512; bannerC.height = 96;
+            const bnCtx = bannerC.getContext('2d');
+            bnCtx.fillStyle = '#fff7ed';
+            bnCtx.fillRect(0, 0, 512, 96);
+            bnCtx.strokeStyle = '#ea580c';
+            bnCtx.lineWidth = 8;
+            bnCtx.strokeRect(6, 6, 500, 84);
+            bnCtx.fillStyle = '#9a3412';
+            bnCtx.font = 'bold 40px Noto Sans TC, sans-serif';
+            bnCtx.textAlign = 'center';
+            bnCtx.textBaseline = 'middle';
+            bnCtx.fillText('WELCOME TO 承昊的世界', 256, 50);
+            const bannerMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(4.4, 0.72, 0.1),
+                new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(bannerC) })
+            );
+            bannerMesh.position.set(0, 3.1, -4.6);
+            g.add(pL, pR, beam, bannerMesh);
+
+            scene.add(g);
+            createLantern(-4.8, 3.8);
+            createLantern(4.8, 3.8);
+        }
+
+        // --- 地標 2：【勤益夕陽籃球場・Sunset Basketball Court】 ---
+        function buildBasketballCourtLandmark() {
+            const g = new THREE.Group();
+            g.position.set(-17, 2.4, 1);
+
+            // 高解析度程序化球場地板紋理（深綠界外 + 紅土色半場 + 清晰白線三分弧與禁區）
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 640;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#2d6a4f';
+            ctx.fillRect(0, 0, 512, 640);
+            ctx.fillStyle = '#c85a38';
+            ctx.fillRect(34, 34, 444, 572);
+            // 禁區
+            ctx.fillStyle = '#9c3e24';
+            ctx.fillRect(172, 34, 168, 225);
+            // 白線標示
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 7;
+            ctx.strokeRect(34, 34, 444, 572);
+            ctx.strokeRect(172, 34, 168, 225);
+            // 罰球圈
+            ctx.beginPath(); ctx.arc(256, 259, 68, 0, Math.PI * 2); ctx.stroke();
+            // 三分線弧
+            ctx.beginPath(); ctx.arc(256, 95, 195, 0.14 * Math.PI, 0.86 * Math.PI); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(80, 34); ctx.lineTo(80, 178); ctx.moveTo(432, 34); ctx.lineTo(432, 178); ctx.stroke();
+            // 中場半圓
+            ctx.beginPath(); ctx.arc(256, 606, 68, Math.PI, 0); ctx.stroke();
+
+            const courtFloor = new THREE.Mesh(
+                new THREE.BoxGeometry(9.6, 0.22, 12.2),
+                new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(c), roughness: 0.85 })
+            );
+            courtFloor.position.y = 0.11;
+            courtFloor.receiveShadow = true;
+            g.add(courtFloor);
+            walkRayMeshes.push(courtFloor);
+
+            // 精緻透明壓克力籃球架
+            const hoopGroup = new THREE.Group();
+            hoopGroup.position.set(0, 0.22, -5.2);
+
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.4, roughness: 0.5 });
+            const mainPole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 4.1, 10), poleMat);
+            mainPole.position.set(0, 2.05, -0.55);
+            mainPole.castShadow = true;
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 1.05), poleMat);
+            arm.position.set(0, 3.65, -0.1);
+            // 透明壓克力籃板 + 白色外框
+            const board = new THREE.Mesh(
+                new THREE.BoxGeometry(2.2, 1.35, 0.08),
+                new THREE.MeshPhysicalMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.48, roughness: 0.1 })
+            );
+            board.position.set(0, 3.7, 0.42);
+            const frame = new THREE.Mesh(
+                new THREE.BoxGeometry(2.26, 1.41, 0.05),
+                new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true })
+            );
+            frame.position.copy(board.position);
+            const shooterBox = new THREE.Mesh(
+                new THREE.BoxGeometry(0.68, 0.52, 0.09),
+                new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true })
+            );
+            shooterBox.position.set(0, 3.48, 0.43);
+
+            // 橘色籃框與白色編織籃網
+            const rim = new THREE.Mesh(
+                new THREE.TorusGeometry(0.38, 0.045, 10, 24),
+                new THREE.MeshStandardMaterial({ color: 0xf97316, metalness: 0.4, roughness: 0.3 })
+            );
+            rim.rotation.x = Math.PI / 2;
+            rim.position.set(0, 3.25, 0.88);
+
+            hoopNetMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.36, 0.22, 0.56, 12, 3, true),
+                new THREE.MeshStandardMaterial({ color: 0xffffff, wireframe: true })
+            );
+            hoopNetMesh.position.set(0, 2.96, 0.88);
+
+            hoopGroup.add(mainPole, arm, board, frame, shooterBox, rim, hoopNetMesh);
+            g.add(hoopGroup);
+
+            // 兩支高聳夜間球場照明燈柱
+            [[-4.9, -4.6], [4.9, -4.6]].forEach(([lx, lz]) => {
+                const lPole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 6.2, 8), poleMat);
+                lPole.position.set(lx, 3.1, lz);
+                lPole.castShadow = true;
+                const lampHead = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.1, 0.28, 0.42),
+                    new THREE.MeshStandardMaterial({ color: 0xfff8e1, emissive: 0xffd54f, emissiveIntensity: 1.4 })
+                );
+                lampHead.position.set(lx * 0.92, 6.1, lz + 0.3);
+                lampHead.rotation.x = 0.45;
+                g.add(lPole, lampHead);
+
+                const pLight = new THREE.PointLight(0xffe0a3, ATMOSPHERES.sunset.lampPower, 18);
+                pLight.position.set(lx * 0.85, 5.7, lz + 0.8);
+                g.add(pLight);
+                pointLamps.push(pLight);
+            });
+
+            // 木造觀賽長椅 & 置球架
+            const bench = new THREE.Mesh(
+                new THREE.BoxGeometry(0.85, 0.48, 3.2),
+                new THREE.MeshStandardMaterial({ color: 0x8d5b3c, flatShading: true })
+            );
+            bench.position.set(-5.3, 0.35, 1.5);
+            bench.castShadow = true;
+            g.add(bench);
+
+            const rack = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.75, 1.8), poleMat);
+            rack.position.set(5.2, 0.45, -1.2);
+            g.add(rack);
+            const ballMat = new THREE.MeshStandardMaterial({ color: 0xea580c, roughness: 0.55 });
+            [-0.55, 0, 0.55].forEach(bz => {
+                const b = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), ballMat);
+                b.position.set(5.2, 0.98, -1.2 + bz);
+                b.castShadow = true;
+                g.add(b);
+            });
+
+            scene.add(g);
+
+            // 獨立投籃用 3D 籃球
+            shotBallMesh = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), ballMat);
+            shotBallMesh.position.set(-17, 2.95, 1.5);
+            shotBallMesh.castShadow = true;
+            scene.add(shotBallMesh);
+        }
+
+        // --- 地標 3：【海濱鋼琴舞台・Seaside Grand Piano Pavilion】 ---
+        function buildPianoPierLandmark() {
+            const g = new THREE.Group();
+            const deckMat = new THREE.MeshStandardMaterial({ color: 0x9c6f48, roughness: 0.85, flatShading: true });
+            const stiltMat = new THREE.MeshStandardMaterial({ color: 0x5c3d28, flatShading: true });
+
+            // 延伸入海的長木棧道
+            const walkway = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.34, 10.0), deckMat);
+            walkway.position.set(0, 1.5, 19.8);
+            walkway.receiveShadow = true;
+            walkway.castShadow = true;
+            g.add(walkway);
+            walkRayMeshes.push(walkway);
+
+            // 寬敞海景鋼琴舞台平台
+            const stage = new THREE.Mesh(new THREE.BoxGeometry(11.0, 0.38, 8.2), deckMat);
+            stage.position.set(0, 1.48, 27.6);
+            stage.receiveShadow = true;
+            stage.castShadow = true;
+            g.add(stage);
+            walkRayMeshes.push(stage);
+
+            // 棧道木樁深入海中
+            [[-2.8, 16.5], [2.8, 16.5], [-2.8, 21.5], [2.8, 21.5], [-5.1, 24.5], [5.1, 24.5], [-5.1, 31.0], [5.1, 31.0]].forEach(([px, pz]) => {
+                const stilt = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 4.2, 7), stiltMat);
+                stilt.position.set(px, -0.4, pz);
+                g.add(stilt);
+            });
+
+            // 溫暖燈串柱與垂掛發光燈泡
+            const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff8dc, emissive: 0xffca28, emissiveIntensity: 1.6 });
+            const posts = [[-2.9, 17.5], [2.9, 17.5], [-2.9, 22.5], [2.9, 22.5], [-5.1, 25.0], [5.1, 25.0], [-5.1, 30.8], [5.1, 30.8]];
+            posts.forEach(([px, pz]) => {
+                const p = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 2.8, 6), stiltMat);
+                p.position.set(px, 3.0, pz);
+                p.castShadow = true;
+                g.add(p);
+                const b = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), bulbMat);
+                b.position.set(px, 4.45, pz);
+                g.add(b);
+            });
+            // 懸掛於舞台上方的串燈光弧
+            for (let i = 0; i <= 8; i++) {
+                const t = i / 8;
+                const bx = -5.1 + t * 10.2;
+                const sag = Math.sin(t * Math.PI) * 0.7;
+                const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), bulbMat);
+                b.position.set(bx, 4.4 - sag, 30.8);
+                g.add(b);
+            }
+            const pianoLight = new THREE.PointLight(0xffd275, ATMOSPHERES.sunset.lampPower * 1.1, 18);
+            pianoLight.position.set(0, 4.5, 27.6);
+            g.add(pianoLight);
+            pointLamps.push(pianoLight);
+
+            // 精緻 3D 黑色平台鋼琴（曲線琴身 ExtrudeGeometry + 掀蓋 + 黑白鍵 + 金色踏板）
+            const piano = new THREE.Group();
+            piano.position.set(0, 1.68, 27.8);
+            piano.rotation.y = Math.PI;
+
+            const pianoMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.16, metalness: 0.35 });
+            const goldMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, metalness: 0.8, roughness: 0.25 });
+
+            // 曲線三角琴身形狀
+            const shape = new THREE.Shape();
+            shape.moveTo(-1.35, -1.2);
+            shape.lineTo(1.35, -1.2);
+            shape.lineTo(1.35, 0.15);
+            shape.bezierCurveTo(1.35, 1.35, 0.4, 1.85, -0.3, 1.75);
+            shape.bezierCurveTo(-1.05, 1.65, -1.35, 0.85, -1.35, -1.2);
+
+            const bodyGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.42, bevelEnabled: true, bevelThickness: 0.04, bevelSize: 0.04, bevelSegments: 2 });
+            bodyGeo.rotateX(Math.PI / 2);
+            const pBody = new THREE.Mesh(bodyGeo, pianoMat);
+            pBody.position.y = 1.48;
+            pBody.castShadow = true;
+            piano.add(pBody);
+
+            // 掀開的鋼琴蓋 + 金色支撐桿
+            const lidGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.06, bevelEnabled: false });
+            lidGeo.rotateX(Math.PI / 2);
+            const lid = new THREE.Mesh(lidGeo, pianoMat);
+            lid.position.set(-1.32, 1.52, 0);
+            lid.rotation.z = -0.45;
+            lid.translateX(1.32);
+            lid.castShadow = true;
+            piano.add(lid);
+
+            const propStick = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.15, 6), goldMat);
+            propStick.position.set(0.85, 1.92, 0.15);
+            propStick.rotation.z = -0.18;
+            piano.add(propStick);
+
+            // 三隻琴腳
+            [[-1.05, -0.95], [1.05, -0.95], [-0.2, 1.35]].forEach(([lx, lz]) => {
+                const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.06, 1.08, 8), pianoMat);
+                leg.position.set(lx, 0.54, lz);
+                leg.castShadow = true;
+                piano.add(leg);
+            });
+
+            // 踏板組
+            const lyre = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.85, 0.1), pianoMat);
+            lyre.position.set(0, 0.55, -0.55);
+            piano.add(lyre);
+            [-0.12, 0, 0.12].forEach(px => {
+                const pedal = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.25), goldMat);
+                pedal.position.set(px, 0.16, -0.68);
+                piano.add(pedal);
+            });
+
+            // 清晰黑白琴鍵 + 譜架
+            const keyBed = new THREE.Mesh(new THREE.BoxGeometry(2.45, 0.12, 0.52), pianoMat);
+            keyBed.position.set(0, 1.06, -1.38);
+            const whiteKeys = new THREE.Mesh(
+                new THREE.BoxGeometry(2.26, 0.08, 0.42),
+                new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 })
+            );
+            whiteKeys.position.set(0, 1.13, -1.42);
+            piano.add(keyBed, whiteKeys);
+
+            const blackKeyMat = new THREE.MeshStandardMaterial({ color: 0x090d16 });
+            for (let i = -0.95; i <= 0.95; i += 0.21) {
+                if (Math.abs(i - 0.1) < 0.08 || Math.abs(i + 0.52) < 0.08) continue;
+                const bk = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.1, 0.26), blackKeyMat);
+                bk.position.set(i, 1.17, -1.34);
+                piano.add(bk);
+            }
+
+            // 白色樂譜
+            const sheet = new THREE.Mesh(
+                new THREE.BoxGeometry(0.85, 0.55, 0.04),
+                new THREE.MeshStandardMaterial({ color: 0xfffef5 })
+            );
+            sheet.position.set(0, 1.65, -1.0);
+            sheet.rotation.x = 0.25;
+            piano.add(sheet);
+
+            // 鋼琴椅
+            const bench = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.58, 0.55), pianoMat);
+            bench.position.set(0, 0.29, -2.25);
+            bench.castShadow = true;
+            piano.add(bench);
+
+            g.add(piano);
+            scene.add(g);
+        }
+
+        // --- 地標 4：【資管秘密基地・Coding Studio & Gaming Den + PUBG 空投彩蛋】 ---
+        function buildStudioLandmark() {
+            const g = new THREE.Group();
+            g.position.set(-15, 4.2, -15);
+            g.rotation.y = Math.PI * 0.22;
+
+            // 現代木質露台地基
+            const base = new THREE.Mesh(
+                new THREE.BoxGeometry(8.4, 0.4, 6.8),
+                new THREE.MeshStandardMaterial({ color: 0x7c583e, flatShading: true })
+            );
+            base.position.y = 0.2;
+            base.receiveShadow = true;
+            base.castShadow = true;
+            g.add(base);
+
+            // 現代玻璃與原木結構牆（正面開放通透，可一眼看清室內戰情桌！）
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0xf4ece1, roughness: 0.85 });
+            const timberMat = new THREE.MeshStandardMaterial({ color: 0x6d4c3d, flatShading: true });
+            const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xbfefff, transparent: true, opacity: 0.28, roughness: 0.1 });
+
+            const backWall = new THREE.Mesh(new THREE.BoxGeometry(7.6, 3.6, 0.28), wallMat);
+            backWall.position.set(0, 2.2, -2.8);
+            backWall.castShadow = true;
+            const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.28, 3.6, 5.8), wallMat);
+            leftWall.position.set(-3.7, 2.2, 0);
+            const rightGlass = new THREE.Mesh(new THREE.BoxGeometry(0.12, 3.4, 5.4), glassMat);
+            rightGlass.position.set(3.7, 2.1, 0);
+            // 現代微斜懸挑屋頂
+            const roof = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.36, 7.4), timberMat);
+            roof.position.set(0, 4.15, 0);
+            roof.rotation.x = 0.08;
+            roof.castShadow = true;
+            // 四根結構木柱
+            [[-3.7, 2.7], [3.7, 2.7], [3.7, -2.8], [-3.7, -2.8]].forEach(([px, pz]) => {
+                const col = new THREE.Mesh(new THREE.BoxGeometry(0.26, 3.8, 0.26), timberMat);
+                col.position.set(px, 2.2, pz);
+                g.add(col);
+            });
+            g.add(backWall, leftWall, rightGlass, roof);
+
+            // 室內雙螢幕程式碼戰情桌
+            const desk = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.14, 1.35), timberMat);
+            desk.position.set(-0.8, 1.25, -1.6);
+            desk.castShadow = true;
+            g.add(desk);
+
+            // 動態程式碼螢幕紋理
+            const codeC = document.createElement('canvas');
+            codeC.width = 256; codeC.height = 160;
+            const cctx = codeC.getContext('2d');
+            cctx.fillStyle = '#0f172a';
+            cctx.fillRect(0, 0, 256, 160);
+            const lines = ['#38bdf8', '#a78bfa', '#34d399', '#fbbf24', '#f472b6'];
+            for (let i = 0; i < 10; i++) {
+                cctx.fillStyle = lines[i % lines.length];
+                cctx.fillRect(14 + (i % 3) * 14, 14 + i * 13, 60 + ((i * 47) % 120), 6);
+            }
+            const monMat = new THREE.MeshStandardMaterial({
+                map: new THREE.CanvasTexture(codeC),
+                emissive: 0x38bdf8,
+                emissiveIntensity: 0.45
+            });
+            const m1 = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.78, 0.07), monMat);
+            m1.position.set(-1.48, 1.82, -1.95);
+            m1.rotation.y = 0.16;
+            const m2 = new THREE.Mesh(new THREE.BoxGeometry(1.25, 0.78, 0.07), monMat);
+            m2.position.set(-0.12, 1.82, -1.95);
+            m2.rotation.y = -0.16;
+            const kb = new THREE.Mesh(
+                new THREE.BoxGeometry(0.95, 0.06, 0.32),
+                new THREE.MeshStandardMaterial({ color: 0x1e293b, emissive: 0x8b5cf6, emissiveIntensity: 0.5 })
+            );
+            kb.position.set(-0.8, 1.35, -1.35);
+            g.add(m1, m2, kb);
+
+            // 迷你懸浮 3D 神經網路 / Perceptron 雕塑（象徵 Python ML 專長）
+            neuralNetGroup = new THREE.Group();
+            neuralNetGroup.position.set(2.0, 2.25, -1.4);
+            const nodeGeo = new THREE.SphereGeometry(0.11, 10, 10);
+            const nodeColors = [0x38bdf8, 0xa855f7, 0x34d399];
+            const layers = [
+                [[-0.7, 0.4, 0], [-0.7, 0, 0], [-0.7, -0.4, 0]],
+                [[0, 0.55, 0], [0, 0.18, 0], [0, -0.18, 0], [0, -0.55, 0]],
+                [[0.7, 0.25, 0], [0.7, -0.25, 0]]
+            ];
+            const edgePts = [];
+            layers.forEach((layer, li) => {
+                const nm = new THREE.MeshStandardMaterial({ color: nodeColors[li], emissive: nodeColors[li], emissiveIntensity: 1.0 });
+                layer.forEach(p => {
+                    const n = new THREE.Mesh(nodeGeo, nm);
+                    n.position.set(p[0], p[1], p[2]);
+                    neuralNetGroup.add(n);
+                });
+                if (li < layers.length - 1) {
+                    layer.forEach(p1 => layers[li + 1].forEach(p2 => {
+                        edgePts.push(new THREE.Vector3(...p1), new THREE.Vector3(...p2));
+                    }));
+                }
+            });
+            const edgeGeo = new THREE.BufferGeometry().setFromPoints(edgePts);
+            const edgeLines = new THREE.LineSegments(edgeGeo, new THREE.LineBasicMaterial({ color: 0xc4b5fd, transparent: true, opacity: 0.65 }));
+            neuralNetGroup.add(edgeLines);
+            g.add(neuralNetGroup);
+
+            // 迷你 Nintendo Switch（經典紅藍 Joy-Con！）擺在側邊小茶几上
+            const sideTable = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.68, 0.9), timberMat);
+            sideTable.position.set(2.2, 0.74, 1.3);
+            const swScreen = new THREE.Mesh(new THREE.BoxGeometry(0.56, 0.08, 0.34), new THREE.MeshStandardMaterial({ color: 0x0f172a, emissive: 0x38bdf8, emissiveIntensity: 0.4 }));
+            swScreen.position.set(2.2, 1.12, 1.3);
+            const joyL = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.34), new THREE.MeshStandardMaterial({ color: 0x06b6d4 }));
+            joyL.position.set(1.85, 1.12, 1.3);
+            const joyR = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.09, 0.34), new THREE.MeshStandardMaterial({ color: 0xf43f5e }));
+            joyR.position.set(2.55, 1.12, 1.3);
+            g.add(sideTable, swScreen, joyL, joyR);
+
+            // 室內暖光 + 紫色科技氛圍光
+            const studioLamp = new THREE.PointLight(0xffcf87, ATMOSPHERES.sunset.lampPower * 1.15, 14);
+            studioLamp.position.set(0, 3.4, 0);
+            g.add(studioLamp);
+            pointLamps.push(studioLamp);
+
+            scene.add(g);
+
+            // === 隱藏彩蛋：工作室後方的 PUBG 紅藍空投補給箱 + 紅色煙霧！ ===
+            airdropCrateGroup = new THREE.Group();
+            const ax = -19.2, az = -19.8;
+            const ay = getTerrainHeight(ax, az);
+            airdropCrateGroup.position.set(ax, ay + 0.72, az);
+            airdropCrateGroup.rotation.y = 0.52;
+
+            const redBox = new THREE.Mesh(
+                new THREE.BoxGeometry(1.45, 1.05, 1.45),
+                new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.55 })
+            );
+            redBox.castShadow = true;
+            const blueTop = new THREE.Mesh(
+                new THREE.BoxGeometry(1.52, 0.45, 1.52),
+                new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.6 })
+            );
+            blueTop.position.y = 0.62;
+            blueTop.castShadow = true;
+            // 黃色綁帶
+            const strapMat = new THREE.MeshStandardMaterial({ color: 0xfacc15 });
+            const s1 = new THREE.Mesh(new THREE.BoxGeometry(1.56, 1.48, 0.14), strapMat);
+            const s2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.48, 1.56), strapMat);
+            airdropCrateGroup.add(redBox, blueTop, s1, s2);
+            airdropCrateGroup.traverse(o => { o.userData.interactable = 'airdrop'; });
+            scene.add(airdropCrateGroup);
+
+            // 紅色空投煙霧粒子
+            const smokeMat = new THREE.MeshBasicMaterial({ color: 0xef4444, transparent: true, opacity: 0.55 });
+            for (let i = 0; i < 14; i++) {
+                const sm = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28, 0), smokeMat.clone());
+                sm.userData = { baseX: ax, baseY: ay + 1.5, baseZ: az, phase: Math.random() * 5.0 };
+                smokeParticles.push(sm);
+                scene.add(sm);
+            }
+        }
+
+        // --- 地標 5：【石橋音樂角・Stone Bridge & Chill Camp】 ---
+        function buildStoneBridgeLandmark() {
+            // 1. 橫跨東側瀉湖的優雅拱形「石橋」
+            const bridgeGroup = new THREE.Group();
+            const stoneMat = new THREE.MeshStandardMaterial({ color: 0xd6cfc2, roughness: 0.9, flatShading: true });
+            const darkStone = new THREE.MeshStandardMaterial({ color: 0x9c9284, roughness: 0.92, flatShading: true });
+
+            const segs = 14;
+            for (let i = 0; i <= segs; i++) {
+                const t = i / segs;
+                const bx = 8.2 + t * 8.8;
+                const by = 1.8 + Math.sin(t * Math.PI) * 1.45;
+                const slope = Math.cos(t * Math.PI) * 0.45;
+
+                const plank = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.34, 3.2), stoneMat);
+                plank.position.set(bx, by - 0.12, 2.0);
+                plank.rotation.z = slope;
+                plank.castShadow = true;
+                plank.receiveShadow = true;
+                bridgeGroup.add(plank);
+                walkRayMeshes.push(plank);
+
+                // 石橋兩側護欄柱
+                if (i % 2 === 0) {
+                    [-1.45, 1.45].forEach(zOff => {
+                        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.85, 0.24), darkStone);
+                        rail.position.set(bx, by + 0.35, 2.0 + zOff);
+                        rail.castShadow = true;
+                        bridgeGroup.add(rail);
+                    });
+                }
+            }
+            scene.add(bridgeGroup);
+
+            // 2. 東岸音樂營地 (21, 2.0, 2)
+            const camp = new THREE.Group();
+            camp.position.set(21, 2.0, 2);
+
+            // 圓形木造 Chill 平台
+            const deck = new THREE.Mesh(
+                new THREE.CylinderGeometry(4.8, 5.0, 0.24, 24),
+                new THREE.MeshStandardMaterial({ color: 0x8d6346, roughness: 0.88, flatShading: true })
+            );
+            deck.position.y = 0.12;
+            deck.receiveShadow = true;
+            camp.add(deck);
+            walkRayMeshes.push(deck);
+
+            // 巨型旋轉 3D 黑膠唱盤雕塑（致敬 Gummy B《石橋》與高爾宣）
+            const turntable = new THREE.Group();
+            turntable.position.set(0.8, 0.25, -1.6);
+            const ttBase = new THREE.Mesh(
+                new THREE.BoxGeometry(2.8, 0.45, 2.4),
+                new THREE.MeshStandardMaterial({ color: 0x4e342e, flatShading: true })
+            );
+            ttBase.position.y = 0.22;
+            ttBase.castShadow = true;
+            turntable.add(ttBase);
+
+            vinylPlatter = new THREE.Group();
+            vinylPlatter.position.set(-0.2, 0.5, 0);
+            const record = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.95, 0.95, 0.06, 28),
+                new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.25, metalness: 0.4 })
+            );
+            const label = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.32, 0.32, 0.075, 20),
+                new THREE.MeshStandardMaterial({ color: 0xf97316 })
+            );
+            const marker = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.65), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+            marker.position.z = 0.45;
+            vinylPlatter.add(record, label, marker);
+            turntable.add(vinylPlatter);
+
+            // 唱臂
+            const armPivot = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.3, 10), new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.7 }));
+            armPivot.position.set(1.05, 0.55, -0.7);
+            const toneArm = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.35, 6), new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.7 }));
+            toneArm.rotation.x = Math.PI / 2;
+            toneArm.rotation.z = 0.38;
+            toneArm.position.set(0.82, 0.64, -0.1);
+            turntable.add(armPivot, toneArm);
+            camp.add(turntable);
+
+            // 12 根隨 Lo-Fi 節拍跳動的 3D 音頻等化器柱
+            const eqColors = [0x10b981, 0x34d399, 0x2dd4bf, 0x38bdf8, 0x818cf8, 0xf472b6];
+            for (let i = 0; i < 12; i++) {
+                const ang = -Math.PI * 0.78 + (i / 11) * Math.PI * 1.15;
+                const barMat = new THREE.MeshStandardMaterial({
+                    color: eqColors[i % eqColors.length],
+                    emissive: eqColors[i % eqColors.length],
+                    emissiveIntensity: 0.65
+                });
+                const bar = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.0, 0.32), barMat);
+                bar.position.set(Math.cos(ang) * 4.1, 0.75, Math.sin(ang) * 4.1);
+                bar.castShadow = true;
+                bar.userData = { index: i };
+                eqBars.push(bar);
+                camp.add(bar);
+            }
+
+            // 溫暖營火與木頭座椅
+            const fireX = -1.2, fireZ = 1.6;
+            for (let i = 0; i < 8; i++) {
+                const a = (i / 8) * Math.PI * 2;
+                const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), darkStone);
+                stone.position.set(fireX + Math.cos(a) * 0.72, 0.32, fireZ + Math.sin(a) * 0.72);
+                camp.add(stone);
+            }
+            const logSeat = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.3, 0.3, 2.2, 8),
+                new THREE.MeshStandardMaterial({ color: 0x6d4c41, flatShading: true })
+            );
+            logSeat.rotation.z = Math.PI / 2;
+            logSeat.position.set(-1.2, 0.45, 3.25);
+            logSeat.castShadow = true;
+            camp.add(logSeat);
+
+            // 營火火花粒子
+            for (let i = 0; i < 12; i++) {
+                const fl = new THREE.Mesh(
+                    new THREE.OctahedronGeometry(0.18, 0),
+                    new THREE.MeshBasicMaterial({ color: i % 2 === 0 ? 0xff6b35 : 0xffd166 })
+                );
+                fl.userData = { baseX: 21 + fireX, baseY: 2.35, baseZ: 2 + fireZ, phase: Math.random() * 6.28, speed: 2.0 + Math.random() * 1.8 };
+                emberParticles.push(fl);
+                scene.add(fl);
+            }
+            const fireLight = new THREE.PointLight(0xff7b36, ATMOSPHERES.sunset.lampPower * 1.4, 15);
+            fireLight.position.set(fireX, 1.4, fireZ);
+            camp.add(fireLight);
+            pointLamps.push(fireLight);
+
+            scene.add(camp);
+        }
+
+        // --- 地標 6：【整張財富燈塔・ETF Lighthouse & 5-Min K-Line Deck】 ---
+        function buildLighthouseLandmark() {
+            const g = new THREE.Group();
+            g.position.set(15, 6.8, -16);
+
+            // 燈塔石造基座
+            const base = new THREE.Mesh(
+                new THREE.CylinderGeometry(3.4, 3.9, 0.8, 12),
+                new THREE.MeshStandardMaterial({ color: 0x94a3b8, flatShading: true })
+            );
+            base.position.y = 0.4;
+            base.receiveShadow = true;
+            base.castShadow = true;
+            g.add(base);
+
+            // 紅白相間高聳風格化燈塔身
+            const redMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.65, flatShading: true });
+            const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.7, flatShading: true });
+            const stripes = [
+                { y: 1.7, r1: 2.1, r2: 1.85, h: 1.8, m: whiteMat },
+                { y: 3.5, r1: 1.85, r2: 1.62, h: 1.8, m: redMat },
+                { y: 5.3, r1: 1.62, r2: 1.4, h: 1.8, m: whiteMat },
+                { y: 7.1, r1: 1.4, r2: 1.18, h: 1.8, m: redMat }
+            ];
+            stripes.forEach(s => {
+                const seg = new THREE.Mesh(new THREE.CylinderGeometry(s.r2, s.r1, s.h, 12), s.m);
+                seg.position.y = s.y;
+                seg.castShadow = true;
+                g.add(seg);
+            });
+
+            // 觀景陽台 + 玻璃燈室 + 圓頂
+            const deck = new THREE.Mesh(new THREE.CylinderGeometry(1.72, 1.5, 0.35, 12), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+            deck.position.y = 8.1;
+            const lanternGlass = new THREE.Mesh(
+                new THREE.CylinderGeometry(1.05, 1.05, 1.45, 12),
+                new THREE.MeshStandardMaterial({ color: 0xfffbeb, emissive: 0xffd54f, emissiveIntensity: 1.8, transparent: true, opacity: 0.88 })
+            );
+            lanternGlass.position.y = 9.0;
+            const dome = new THREE.Mesh(new THREE.ConeGeometry(1.38, 1.35, 12), redMat);
+            dome.position.y = 10.35;
+            g.add(deck, lanternGlass, dome);
+
+            // 旋轉體積光束（夜晚與夕陽掃射全島與海洋！）
+            lighthouseBeamGroup = new THREE.Group();
+            lighthouseBeamGroup.position.set(0, 9.0, 0);
+
+            const beamGeo = new THREE.ConeGeometry(5.8, 34, 24, 1, true);
+            beamGeo.translate(0, -17, 0);
+            beamGeo.rotateX(Math.PI / 2);
+            lighthouseBeamMat = new THREE.MeshBasicMaterial({
+                color: 0xfff0a6,
+                transparent: true,
+                opacity: 0.16,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            const beam1 = new THREE.Mesh(beamGeo, lighthouseBeamMat);
+            beam1.rotation.x = 0.24;
+            const beam2 = beam1.clone();
+            beam2.rotation.y = Math.PI;
+            beam2.rotation.x = -0.24;
+            lighthouseBeamGroup.add(beam1, beam2);
+            g.add(lighthouseBeamGroup);
+
+            // 懸崖觀景台：發光 3D「5分K線」紅綠上漲趨勢雕塑
+            const kDeck = new THREE.Group();
+            kDeck.position.set(-4.2, 0.1, 3.2);
+            kDeck.rotation.y = 0.6;
+
+            const kBase = new THREE.Mesh(
+                new THREE.BoxGeometry(4.6, 0.3, 2.2),
+                new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5 })
+            );
+            kBase.position.y = 0.15;
+            kDeck.add(kBase);
+
+            // 台股習慣：紅漲綠跌
+            const candles = [
+                { h: 0.9, y: 0.8, up: true },
+                { h: 0.65, y: 1.0, up: false },
+                { h: 1.25, y: 1.35, up: true },
+                { h: 1.05, y: 1.6, up: true },
+                { h: 0.6, y: 1.75, up: false },
+                { h: 1.55, y: 2.2, up: true },
+                { h: 1.8, y: 2.75, up: true }
+            ];
+            const trendPts = [];
+            candles.forEach((cd, idx) => {
+                const cx = -1.8 + idx * 0.6;
+                const col = cd.up ? 0xef4444 : 0x22c55e;
+                const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.65 });
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.32, cd.h, 0.32), mat);
+                body.position.set(cx, cd.y, 0);
+                body.castShadow = true;
+                const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, cd.h + 0.55, 6), mat);
+                wick.position.set(cx, cd.y, 0);
+                kDeck.add(body, wick);
+                trendPts.push(new THREE.Vector3(cx, cd.y + cd.h * 0.5 + 0.25, 0.25));
+            });
+            const trendLine = new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints(trendPts),
+                new THREE.LineBasicMaterial({ color: 0xfde047 })
+            );
+            kDeck.add(trendLine);
+            g.add(kDeck);
+
+            const peakLight = new THREE.PointLight(0xffd54f, ATMOSPHERES.sunset.lampPower * 1.3, 18);
+            peakLight.position.set(0, 9.2, 0);
+            g.add(peakLight);
+            pointLamps.push(peakLight);
+
+            scene.add(g);
+        }
+
+        // =========================================================================
+        // 9. 樹木、花卉、岩石、雲朵與環境微粒
+        // =========================================================================
+        function buildFoliageAndDecor() {
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6b4a35, flatShading: true });
+            const pineCols = [0x2d7a47, 0x3b8c52, 0x4ca35c];
+            const leafCols = [0x5ab863, 0x76c76d, 0xf28db2]; // 包含幾棵點綴的淡粉櫻花樹
+
+            const treeSpots = [
+                [-8, -7, 'pine'], [-10, -18, 'blossom'], [-22, -10, 'pine'], [-24, -4, 'broad'],
+                [-23, 8, 'pine'], [-16, 12, 'broad'], [-10, 14, 'blossom'], [-6, 11, 'pine'],
+                [6, 12, 'broad'], [10, 15, 'pine'], [18, 11, 'broad'], [25, 6, 'pine'],
+                [24, -5, 'blossom'], [22, -12, 'pine'], [7, -18, 'pine'], [4, -12, 'broad'],
+                [-4, -16, 'pine'], [-19, -22, 'pine'], [21, -20, 'broad'], [10, -7, 'blossom']
+            ];
+
+            treeSpots.forEach(([tx, tz, type]) => {
+                const ty = getTerrainHeight(tx, tz);
+                if (ty < 0.8) return;
+                const tree = new THREE.Group();
+                tree.position.set(tx, ty - 0.1, tz);
+
+                const sc = 0.85 + Math.random() * 0.45;
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.28, 1.7, 6), trunkMat);
+                trunk.position.y = 0.85;
+                trunk.castShadow = true;
+                tree.add(trunk);
+
+                if (type === 'pine') {
+                    const mat = new THREE.MeshStandardMaterial({ color: pineCols[Math.floor(Math.random() * pineCols.length)], flatShading: true });
+                    [0, 1, 2].forEach(lvl => {
+                        const cone = new THREE.Mesh(new THREE.ConeGeometry(1.45 - lvl * 0.34, 1.85, 7), mat);
+                        cone.position.y = 2.0 + lvl * 1.05;
+                        cone.castShadow = true;
+                        tree.add(cone);
+                    });
+                } else {
+                    const col = type === 'blossom' ? 0xf7a1c4 : leafCols[Math.floor(Math.random() * 2)];
+                    const mat = new THREE.MeshStandardMaterial({ color: col, flatShading: true });
+                    const mainCrown = new THREE.Mesh(new THREE.DodecahedronGeometry(1.45, 1), mat);
+                    mainCrown.position.y = 2.65;
+                    mainCrown.castShadow = true;
+                    const subCrown = new THREE.Mesh(new THREE.DodecahedronGeometry(0.95, 1), mat);
+                    subCrown.position.set(0.75, 2.25, 0.4);
+                    tree.add(mainCrown, subCrown);
+                }
+
+                tree.scale.setScalar(sc);
+                tree.userData = { phase: Math.random() * 6.28 };
+                swayTrees.push(tree);
+                scene.add(tree);
+            });
+
+            // 可愛草叢與野花點綴
+            const flowerCols = [0xfef08a, 0xf9a8d4, 0xffffff, 0x93c5fd];
+            for (let i = 0; i < 65; i++) {
+                const ang = Math.random() * Math.PI * 2;
+                const rad = 6.5 + Math.random() * 19;
+                const fx = Math.cos(ang) * rad;
+                const fz = Math.sin(ang) * rad;
+                const fy = getTerrainHeight(fx, fz);
+                if (fy < 0.9 || Math.hypot(fx + 17, fz - 1) < 7.2) continue;
+
+                const flower = new THREE.Mesh(
+                    new THREE.DodecahedronGeometry(0.16, 0),
+                    new THREE.MeshStandardMaterial({ color: flowerCols[i % flowerCols.length], flatShading: true })
+                );
+                flower.position.set(fx, fy + 0.14, fz);
+                scene.add(flower);
+            }
+
+            // 沿途追加溫暖路燈
+            createLantern(-8.5, -7.5);
+            createLantern(7.5, -6.5);
+            createLantern(16.2, 2.0);
+        }
+
+        function buildClouds() {
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                roughness: 0.95,
+                flatShading: true,
+                transparent: true,
+                opacity: 0.88
+            });
+            for (let i = 0; i < 12; i++) {
+                const cg = new THREE.Group();
+                const puffs = 3 + Math.floor(Math.random() * 3);
+                for (let j = 0; j < puffs; j++) {
+                    const p = new THREE.Mesh(new THREE.DodecahedronGeometry(1.9 + Math.random() * 1.4, 1), mat);
+                    p.position.set((j - puffs / 2) * 2.3, (Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 1.4);
+                    p.scale.y = 0.65;
+                    cg.add(p);
+                }
+                cg.position.set((Math.random() - 0.5) * 140, 22 + Math.random() * 12, (Math.random() - 0.5) * 130);
+                cg.userData = { speed: 0.55 + Math.random() * 0.65 };
+                clouds.push(cg);
+                scene.add(cg);
+            }
+        }
+
+        function buildAmbientParticles() {
+            const count = 160;
+            const geo = new THREE.BufferGeometry();
+            const pos = new Float32Array(count * 3);
+            for (let i = 0; i < count; i++) {
+                const x = (Math.random() - 0.5) * 68;
+                const y = 2 + Math.random() * 18;
+                const z = (Math.random() - 0.5) * 68;
+                pos[i * 3] = x; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z;
+                ambientParticlesData.push({ x, y, z, phase: Math.random() * 6.28, speed: 0.4 + Math.random() * 0.8 });
+            }
+            geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const mat = new THREE.PointsMaterial({
+                color: ATMOSPHERES.sunset.particleColor,
+                size: 0.42,
+                transparent: true,
+                opacity: 0.82
+            });
+            ambientParticlesMesh = new THREE.Points(geo, mat);
+            scene.add(ambientParticlesMesh);
+        }
+
+        function buildClickRipple() {
+            const geo = new THREE.RingGeometry(0.35, 0.55, 24);
+            geo.rotateX(-Math.PI / 2);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xfde047, transparent: true, opacity: 0, side: THREE.DoubleSide });
+            clickRippleMesh = new THREE.Mesh(geo, mat);
+            scene.add(clickRippleMesh);
+        }
+
+        // =========================================================================
+        // 10. 可愛風格化主角（承昊：帽T + 球鞋 + 雙肩後背包）
+        // =========================================================================
+        function buildPlayerAvatar() {
+            playerGroup = new THREE.Group();
+
+            // 腳底接觸陰影圈
+            const shadowDisc = new THREE.Mesh(
+                new THREE.CircleGeometry(0.55, 16),
+                new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 })
+            );
+            shadowDisc.rotation.x = -Math.PI / 2;
+            shadowDisc.position.y = 0.03;
+            playerGroup.add(shadowDisc);
+
+            const bodyContainer = new THREE.Group();
+
+            // 溫暖焦糖橘帽T
+            const hoodieMat = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.75, flatShading: true });
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.42, 0.92, 10), hoodieMat);
+            torso.position.y = 0.98;
+            torso.castShadow = true;
+            bodyContainer.add(torso);
+
+            // 帽T連帽領口
+            const hood = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.09, 8, 12), hoodieMat);
+            hood.rotation.x = Math.PI / 2;
+            hood.position.set(0, 1.42, -0.04);
+            bodyContainer.add(hood);
+
+            // 深藍雙肩後背包
+            const pack = new THREE.Mesh(
+                new THREE.BoxGeometry(0.52, 0.62, 0.28),
+                new THREE.MeshStandardMaterial({ color: 0x1e3a8a, flatShading: true })
+            );
+            pack.position.set(0, 1.02, -0.34);
+            pack.castShadow = true;
+            bodyContainer.add(pack);
+
+            // 頭部與微捲黑髮
+            const head = new THREE.Mesh(
+                new THREE.DodecahedronGeometry(0.38, 1),
+                new THREE.MeshStandardMaterial({ color: 0xffdfc4, flatShading: true })
+            );
+            head.position.y = 1.72;
+            head.castShadow = true;
+            bodyContainer.add(head);
+
+            const hair = new THREE.Mesh(
+                new THREE.SphereGeometry(0.41, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.58),
+                new THREE.MeshStandardMaterial({ color: 0x1f1916, flatShading: true })
+            );
+            hair.position.set(0, 1.76, -0.03);
+            bodyContainer.add(hair);
+
+            // 可愛眼睛
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
+            const eL = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 6), eyeMat);
+            eL.position.set(-0.13, 1.72, 0.34);
+            const eR = eL.clone();
+            eR.position.x = 0.13;
+            bodyContainer.add(eL, eR);
+
+            // 四肢（帶關節軸點）
+            const pantsMat = new THREE.MeshStandardMaterial({ color: 0x334155, flatShading: true });
+            const shoeMat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true });
+
+            const makeLeg = (xOff) => {
+                const pivot = new THREE.Group();
+                pivot.position.set(xOff, 0.55, 0);
+                const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.1, 0.48, 7), pantsMat);
+                leg.position.y = -0.22;
+                leg.castShadow = true;
+                const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.32), shoeMat);
+                shoe.position.set(0, -0.46, 0.06);
+                pivot.add(leg, shoe);
+                return pivot;
+            };
+            const legL = makeLeg(-0.17);
+            const legR = makeLeg(0.17);
+
+            const makeArm = (xOff) => {
+                const pivot = new THREE.Group();
+                pivot.position.set(xOff, 1.32, 0);
+                const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.08, 0.54, 7), hoodieMat);
+                arm.position.y = -0.24;
+                arm.castShadow = true;
+                pivot.add(arm);
+                return pivot;
+            };
+            const armL = makeArm(-0.42);
+            const armR = makeArm(0.42);
+
+            bodyContainer.add(legL, legR, armL, armR);
+            playerGroup.add(bodyContainer);
+            playerRig = { bodyContainer, legL, legR, armL, armR, shadowDisc };
+
+            playerGroup.position.copy(playerPos);
+            scene.add(playerGroup);
+        }
+
+        // 建立 3D 浮動標籤 DOM
+        function buildWorldPins() {
+            const layer = document.getElementById('pins-layer');
+            Object.values(ZONES).forEach(z => {
+                const el = document.createElement('button');
+                el.id = 'pin-' + z.id;
+                el.className = 'world-pin';
+                el.textContent = `${z.icon} ${z.name}`;
+                el.onclick = () => fastTravelTo(z.id, true);
+                layer.appendChild(el);
+            });
+        }
+
+        // =========================================================================
+        // 11. 彩蛋成就 & Toast 系統
+        // =========================================================================
+        let toastTimer = null;
+        function showToast(icon, msg) {
+            const box = document.getElementById('toast-box');
+            document.getElementById('toast-icon').textContent = icon;
+            document.getElementById('toast-msg').textContent = msg;
+            box.style.opacity = '1';
+            box.style.transform = 'translate(-50%, 0)';
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                box.style.opacity = '0';
+                box.style.transform = 'translate(-50%, -12px)';
+            }, 3000);
+        }
+
+        function unlockEgg(key, customMsg) {
+            if (!EGGS[key] || EGGS[key].done) return;
+            EGGS[key].done = true;
+            sound.playChime();
+            updateEggChecklistUI();
+            const count = Object.values(EGGS).filter(e => e.done).length;
+            showToast('🏆', customMsg || `解鎖彩蛋 (${count}/6)：${EGGS[key].label}`);
+            if (count === 6) {
+                setTimeout(() => showToast('👑', '恭喜！你已完整探索承昊的 3D 世界全部 6 大彩蛋！'), 3100);
+            }
+        }
+
+        function updateEggChecklistUI() {
+            const list = document.getElementById('egg-checklist');
+            const doneCount = Object.values(EGGS).filter(e => e.done).length;
+            document.getElementById('egg-counter').textContent = `${doneCount} / 6`;
+            document.getElementById('egg-progress-bar').style.width = `${(doneCount / 6) * 100}%`;
+            list.innerHTML = '';
+            Object.values(EGGS).forEach(e => {
+                const li = document.createElement('li');
+                li.className = `flex items-center gap-2 ${e.done ? 'line-through opacity-60 font-medium' : 'font-bold'}`;
+                li.innerHTML = `<span>${e.done ? '✅' : '⬜'}</span><span>${e.label}</span>`;
+                list.appendChild(li);
+            });
+        }
+
+        // =========================================================================
+        // 12. 互動抽屜內容建構（含投籃挑戰、真實鋼琴、資管井字棋、Lo-Fi、5分K戰情室）
+        // =========================================================================
+
+        // --- 投籃小遊戲狀態 ---
+        const basketballState = { score: 0, streak: 0, cursorPos: 50, cursorDir: 1, running: false };
+
+        // --- 資管工作室：井字棋 AI 狀態 ---
+        let tttBoard = Array(9).fill('');
+        let tttMsg = '換你下（你是 ⭕，AI 是 ❌）';
+
+        // --- 燈塔：整張 ETF 5分K 模擬戰情室狀態 ---
+        const ETF_DATA = {
+            '0056': { name: '元大高股息', price: 37.85, yieldRate: 0.088, candles: [], holdings: 2, avgCost: 36.40 },
+            '00878': { name: '國泰永續高股息', price: 22.90, yieldRate: 0.082, candles: [], holdings: 3, avgCost: 21.85 },
+            '00919': { name: '群益台灣精選高息', price: 24.45, yieldRate: 0.095, candles: [], holdings: 1, avgCost: 23.90 },
+            '00981A': { name: '主動精選成長ETF', price: 15.60, yieldRate: 0.065, candles: [], holdings: 0, avgCost: 0 }
+        };
+        let activeEtfCode = '0056';
+        let etfCash = 500000;
+        // 預先生成各檔 24 根 5 分 K 歷史資料
+        Object.values(ETF_DATA).forEach(etf => {
+            let p = etf.price * 0.985;
+            for (let i = 0; i < 24; i++) {
+                const open = p;
+                const delta = (Math.random() - 0.47) * (etf.price * 0.008);
+                const close = +(open + delta).toFixed(2);
+                const high = +(Math.max(open, close) + Math.random() * 0.12).toFixed(2);
+                const low = +(Math.min(open, close) - Math.random() * 0.12).toFixed(2);
+                etf.candles.push({ open, close, high, low });
+                p = close;
+            }
+            etf.price = p;
+        });
+
+        function openLandmarkDrawer(zoneId) {
+            const z = ZONES[zoneId];
+            if (!z) return;
+            openDrawerZone = zoneId;
+            document.getElementById('drawer-icon').textContent = z.icon;
+            document.getElementById('drawer-title').textContent = z.name;
+            document.getElementById('drawer-sub').textContent = z.en;
+
+            const body = document.getElementById('drawer-body');
+            body.innerHTML = '';
+
+            if (zoneId === 'plaza') renderPlazaDrawer(body);
+            else if (zoneId === 'court') renderCourtDrawer(body);
+            else if (zoneId === 'piano') renderPianoDrawer(body);
+            else if (zoneId === 'studio') renderStudioDrawer(body);
+            else if (zoneId === 'bridge') renderBridgeDrawer(body);
+            else if (zoneId === 'lighthouse') renderLighthouseDrawer(body);
+
+            document.getElementById('landmark-drawer').classList.add('open');
+            highlightDock(zoneId);
+        }
+
+        function closeLandmarkDrawer() {
+            openDrawerZone = null;
+            basketballState.running = false;
+            document.getElementById('landmark-drawer').classList.remove('open');
+            highlightDock(null);
+        }
+
+        function highlightDock(zoneId) {
+            document.querySelectorAll('.dock-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.zone === zoneId);
+            });
+        }
+
+        // 1. 風城啟程廣場內容
+        function renderPlazaDrawer(body) {
+            body.innerHTML = `
+                <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25">
+                    <div class="font-black text-sm mb-1">👋 嗨，我是卓承昊（Cheng-Hao）</div>
+                    <p class="leading-relaxed text-xs">
+                        來自<strong>新竹（風城）</strong>，目前在台中就讀<strong>國立勤益科技大學 資訊管理系</strong>。同時也是一名在台中騎車通勤外派的<strong>鋼琴家教</strong>。
+                    </p>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-[11px]">
+                    <div class="p-2.5 rounded-xl bg-black/5">
+                        <div class="text-sub font-bold">🎓 專業背景</div>
+                        <div class="font-extrabold mt-0.5">勤益科大資管系</div>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-black/5">
+                        <div class="text-sub font-bold">🎹 音樂斜槓</div>
+                        <div class="font-extrabold mt-0.5">Yamaha六級 / 家教</div>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-black/5">
+                        <div class="text-sub font-bold">🏀 休閒興趣</div>
+                        <div class="font-extrabold mt-0.5">籃球 / Switch / PUBG</div>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-black/5">
+                        <div class="text-sub font-bold">📈 投資理念</div>
+                        <div class="font-extrabold mt-0.5">買整張 ETF 看 5分K</div>
+                    </div>
+                </div>
+                <button id="btn-scooter-egg" class="w-full py-2.5 px-4 rounded-xl font-extrabold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2 shadow-md">
+                    <span>🛵 發動通勤機車（30分鐘台中家教日常）</span>
+                </button>
+            `;
+            document.getElementById('btn-scooter-egg').onclick = () => {
+                sound.playBounce();
+                unlockEgg('scooter', '🛵 噗噗噗！啟動 30 分鐘台中鋼琴家教熱血通勤模式！');
+            };
+        }
+
+        // 2. 夕陽籃球場：互動投籃挑戰
+        function renderCourtDrawer(body) {
+            basketballState.running = true;
+            body.innerHTML = `
+                <p class="leading-relaxed text-xs">
+                    灑滿橘金色夕陽的戶外籃球場，重現下課後在勤益球場揮灑汗水的熱血時刻！抓準指針落在<strong>綠色甜蜜點</strong>的瞬間按下投籃！
+                </p>
+                <div class="p-3.5 rounded-2xl bg-orange-500/10 border border-orange-500/25 space-y-3">
+                    <div class="flex justify-between items-center text-xs font-extrabold">
+                        <span>🏆 目前得分：<span id="bb-score" class="text-orange-500 text-base">${basketballState.score}</span></span>
+                        <span>🔥 連進：<span id="bb-streak" class="text-amber-500 text-base">${basketballState.streak}</span></span>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-[10px] text-sub font-bold mb-1">
+                            <span>太輕</span><span class="text-emerald-600">★ 空心綠區 ★</span><span>太重</span>
+                        </div>
+                        <div class="shot-bar-track">
+                            <div id="bb-cursor" class="shot-cursor" style="left: 50%"></div>
+                        </div>
+                    </div>
+                    <button id="btn-shoot-ball" class="w-full py-3 rounded-xl font-black text-sm text-white bg-gradient-to-r from-orange-500 to-red-500 hover:brightness-110 active:scale-95 transition shadow-lg">
+                        🏀 抓準時機・出手投籃！
+                    </button>
+                </div>
+            `;
+            document.getElementById('btn-shoot-ball').onclick = () => triggerBasketballShot();
+        }
+
+        function triggerBasketballShot() {
+            if (shotBallState.active) return;
+            const p = basketballState.cursorPos;
+            const isSwish = p >= 42 && p <= 58;
+            shotBallState.active = true;
+            shotBallState.t = 0;
+            shotBallState.willScore = isSwish;
+            shotBallState.start.set(-17 + (Math.random() - 0.5) * 3.5, 3.8, 3.6);
+            shotBallState.target.set(-17 + (isSwish ? 0 : (p < 42 ? -0.65 : 0.65)), 5.65, -3.32);
+
+            if (isSwish) {
+                basketballState.streak++;
+                basketballState.score += basketballState.streak >= 3 ? 3 : 2;
+            } else {
+                basketballState.streak = 0;
+            }
+            const sEl = document.getElementById('bb-score');
+            const stEl = document.getElementById('bb-streak');
+            if (sEl) sEl.textContent = basketballState.score;
+            if (stEl) stEl.textContent = basketballState.streak;
+        }
+
+        // 3. 海濱鋼琴舞台：真實可彈奏鍵盤 + 自動演奏
+        const PIANO_KEYS = [
+            { note: 'C4', freq: 261.63, key: 'A', black: false },
+            { note: 'C#4', freq: 277.18, key: 'W', black: true, left: '7.5%' },
+            { note: 'D4', freq: 293.66, key: 'S', black: false },
+            { note: 'D#4', freq: 311.13, key: 'E', black: true, left: '17.6%' },
+            { note: 'E4', freq: 329.63, key: 'D', black: false },
+            { note: 'F4', freq: 349.23, key: 'F', black: false },
+            { note: 'F#4', freq: 369.99, key: 'T', black: true, left: '37.6%' },
+            { note: 'G4', freq: 392.00, key: 'G', black: false },
+            { note: 'G#4', freq: 415.30, key: 'Y', black: true, left: '47.6%' },
+            { note: 'A4', freq: 440.00, key: 'H', black: false },
+            { note: 'A#4', freq: 466.16, key: 'U', black: true, left: '57.6%' },
+            { note: 'B4', freq: 493.88, key: 'J', black: false },
+            { note: 'C5', freq: 523.25, key: 'K', black: false },
+            { note: 'C#5', freq: 554.37, key: 'O', black: true, left: '77.6%' },
+            { note: 'D5', freq: 587.33, key: 'L', black: false },
+            { note: 'E5', freq: 659.25, key: ';', black: false }
+        ];
+
+        function triggerPianoKey(noteObj) {
+            sound.playPianoNote(noteObj.freq, 1.45, 0.22);
+            spawn3DMusicNote();
+            unlockEgg('piano', '🎹 優美琴聲在海面上迴盪！（已解鎖海濱鋼琴彩蛋）');
+            const el = document.querySelector(`[data-note="${noteObj.note}"]`);
+            if (el) {
+                el.classList.add('pressed');
+                setTimeout(() => el.classList.remove('pressed'), 210);
+            }
+        }
+
+        function renderPianoDrawer(body) {
+            const whites = PIANO_KEYS.filter(k => !k.black);
+            const blacks = PIANO_KEYS.filter(k => k.black);
+
+            body.innerHTML = `
+                <p class="leading-relaxed text-xs">
+                    通過 <strong>Yamaha 鋼琴六級檢定</strong>，擅長<strong>聽奏即興</strong>，並擁有台中外派鋼琴家教經驗。可直接點擊下方琴鍵，或用電腦鍵盤 <code class="px-1 py-0.5 rounded bg-black/10 font-bold">A-S-D-F-G-H-J-K</code> 彈奏！
+                </p>
+                <div class="piano-wrap" id="piano-kb">
+                    ${whites.map(k => `<div class="piano-white" data-note="${k.note}">${k.key}</div>`).join('')}
+                    ${blacks.map(k => `<div class="piano-black" data-note="${k.note}" style="left:${k.left}">${k.key}</div>`).join('')}
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="btn-melody-romantic" class="py-2.5 px-3 rounded-xl font-extrabold text-xs text-white bg-gradient-to-r from-sky-500 to-blue-600 hover:brightness-110 active:scale-95 transition">
+                        🎵 浪漫和弦進行
+                    </button>
+                    <button id="btn-melody-jazz" class="py-2.5 px-3 rounded-xl font-extrabold text-xs text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:brightness-110 active:scale-95 transition">
+                        🎷 爵士輕快律動
+                    </button>
+                </div>
+            `;
+
+            body.querySelectorAll('[data-note]').forEach(el => {
+                const nObj = PIANO_KEYS.find(k => k.note === el.dataset.note);
+                el.addEventListener('pointerdown', (e) => { e.preventDefault(); triggerPianoKey(nObj); });
+            });
+
+            const playSeq = (seq, gapMs) => {
+                seq.forEach((n, idx) => {
+                    const obj = PIANO_KEYS.find(k => k.note === n);
+                    if (obj) setTimeout(() => triggerPianoKey(obj), idx * gapMs);
+                });
+            };
+            document.getElementById('btn-melody-romantic').onclick = () => {
+                playSeq(['C4', 'E4', 'G4', 'B4', 'D5', 'C5', 'A4', 'E4', 'F4', 'A4', 'C5', 'E5', 'D5', 'G4', 'B4', 'C5'], 200);
+            };
+            document.getElementById('btn-melody-jazz').onclick = () => {
+                playSeq(['D4', 'F4', 'A4', 'C5', 'E5', 'D5', 'G4', 'B4', 'D5', 'F#4', 'G4', 'C4', 'E4', 'G4', 'B4', 'D5'], 165);
+            };
+        }
+
+        // 4. 資管秘密基地：作品集 + 井字棋 AI + PUBG 空投
+        const PROJECTS = [
+            { title: 'C# WinForms + SQLite 預約系統', tag: 'Desktop App', desc: '完整 CRUD、資料庫關聯設計與直覺表單介面，支援預約衝突檢查與報表匯出。' },
+            { title: 'Python ML 深度學習實驗', tag: 'AI / Machine Learning', desc: '實作感知器 (Perceptron)、多層感知器 (MLP) 與卷積神經網路 (CNN) 辨識 MNIST 手寫數字。' },
+            { title: 'SQL Server Northwind 資料庫', tag: 'Database', desc: '複雜 JOIN 查詢、預存程序、正規化設計與商業營運數據分析。' },
+            { title: 'Vue 3 + Fetch API 互動前端', tag: 'Frontend', desc: '元件化響應式網頁開發，非同步串接外部 REST API 即時更新畫面資料。' },
+            { title: 'Java OOP 物件導向小遊戲中心', tag: 'Java OOP', desc: '運用繼承、多型與封裝架構打造多款經典邏輯小遊戲與 AI 對戰模組。' }
+        ];
+
+        function renderStudioDrawer(body) {
+            body.innerHTML = `
+                <div class="flex gap-1.5 p-1 rounded-xl bg-black/5">
+                    <button id="tab-proj" class="flex-1 py-1.5 rounded-lg text-xs font-extrabold bg-violet-600 text-white shadow-sm">📂 技術作品集</button>
+                    <button id="tab-game" class="flex-1 py-1.5 rounded-lg text-xs font-extrabold hover:bg-black/5">🎮 井字棋 AI 對戰</button>
+                </div>
+                <div id="studio-tab-content" class="space-y-2.5"></div>
+                <div class="p-3 rounded-2xl bg-red-500/10 border border-red-500/25 flex items-center justify-between gap-2">
+                    <div class="text-[11px]">
+                        <div class="font-extrabold text-red-600 dark:text-red-400">📦 屋後隱藏彩蛋：PUBG 空投箱</div>
+                        <div class="text-sub">冒著紅煙的補給箱就在基地後方！</div>
+                    </div>
+                    <button id="btn-loot-airdrop" class="px-3 py-1.5 rounded-xl text-xs font-black bg-red-600 text-white hover:brightness-110 active:scale-95 transition shrink-0">拾取空投</button>
+                </div>
+            `;
+            document.getElementById('btn-loot-airdrop').onclick = () => lootAirdrop();
+
+            const tabProj = document.getElementById('tab-proj');
+            const tabGame = document.getElementById('tab-game');
+            const content = document.getElementById('studio-tab-content');
+
+            const showProjects = () => {
+                tabProj.className = 'flex-1 py-1.5 rounded-lg text-xs font-extrabold bg-violet-600 text-white shadow-sm';
+                tabGame.className = 'flex-1 py-1.5 rounded-lg text-xs font-extrabold hover:bg-black/5';
+                content.innerHTML = PROJECTS.map(p => `
+                    <div class="p-2.5 rounded-xl bg-black/5 border border-black/5 hover:border-violet-400/50 transition">
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="font-extrabold text-xs">${p.title}</span>
+                            <span class="px-2 py-0.5 rounded-md bg-violet-500/15 text-violet-600 dark:text-violet-300 text-[10px] font-bold shrink-0">${p.tag}</span>
+                        </div>
+                        <p class="mt-1 text-[11px] text-sub leading-relaxed">${p.desc}</p>
+                    </div>
+                `).join('');
+            };
+
+            const showTicTacToe = () => {
+                tabGame.className = 'flex-1 py-1.5 rounded-lg text-xs font-extrabold bg-violet-600 text-white shadow-sm';
+                tabProj.className = 'flex-1 py-1.5 rounded-lg text-xs font-extrabold hover:bg-black/5';
+                renderTTT(content);
+            };
+
+            tabProj.onclick = showProjects;
+            tabGame.onclick = showTicTacToe;
+            showProjects();
+        }
+
+        function renderTTT(container) {
+            container.innerHTML = `
+                <div class="text-center space-y-2.5">
+                    <div class="text-xs font-extrabold">${tttMsg}</div>
+                    <div class="grid grid-cols-3 gap-2 max-w-[200px] mx-auto">
+                        ${tttBoard.map((val, idx) => `
+                            <button data-ttt="${idx}" class="h-14 rounded-xl bg-black/10 hover:bg-violet-500/20 text-xl font-black transition active:scale-95">
+                                ${val === 'O' ? '⭕' : val === 'X' ? '❌' : ''}
+                            </button>
+                        `).join('')}
+                    </div>
+                    <button id="btn-ttt-reset" class="px-4 py-1.5 rounded-xl bg-black/10 hover:bg-black/20 text-xs font-bold">🔄 重新開局</button>
+                </div>
+            `;
+            container.querySelectorAll('[data-ttt]').forEach(btn => {
+                btn.onclick = () => {
+                    const idx = Number(btn.dataset.ttt);
+                    if (tttBoard[idx] || checkTTTWinner(tttBoard)) return;
+                    tttBoard[idx] = 'O';
+                    sound.playPianoNote(523.25, 0.25, 0.12);
+                    const w1 = checkTTTWinner(tttBoard);
+                    if (w1) { tttMsg = w1 === 'O' ? '🎉 漂亮！你擊敗了資管 AI！' : '🤝 平手！勢均力敵！'; renderTTT(container); return; }
+                    // AI 回合（優先找空位或中心）
+                    const empties = tttBoard.map((v, i) => v === '' ? i : -1).filter(i => i !== -1);
+                    if (empties.length) {
+                        const pick = empties.includes(4) ? 4 : empties[Math.floor(Math.random() * empties.length)];
+                        tttBoard[pick] = 'X';
+                    }
+                    const w2 = checkTTTWinner(tttBoard);
+                    tttMsg = w2 === 'X' ? '🤖 AI 獲勝！再挑戰一局吧！' : w2 === 'D' ? '🤝 平手！' : '換你下（你是 ⭕）';
+                    renderTTT(container);
+                };
+            });
+            document.getElementById('btn-ttt-reset').onclick = () => {
+                tttBoard = Array(9).fill('');
+                tttMsg = '換你下（你是 ⭕，AI 是 ❌）';
+                renderTTT(container);
+            };
+        }
+
+        function checkTTTWinner(b) {
+            const wins = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+            for (const [a, c, d] of wins) if (b[a] && b[a] === b[c] && b[a] === b[d]) return b[a];
+            return b.every(x => x) ? 'D' : null;
+        }
+
+        function lootAirdrop() {
+            spawnBurstParticles(airdropCrateGroup.position, 0xfacc15);
+            unlockEgg('airdrop', '📦 空投拾取成功！獲得【三級頭盔 + AWM】大吉大利今晚吃雞！');
+        }
+
+        // 5. 石橋音樂角：Lo-Fi 節奏機
+        function renderBridgeDrawer(body) {
+            body.innerHTML = `
+                <p class="leading-relaxed text-xs">
+                    跨過島上的<strong>「石橋」</strong>來到營火旁，這裡收藏著最能讓我進入狀態的華語嘻哈與 Chill 歌單！開啟下方 Lo-Fi 節奏機，3D 營火旁的等化器會跟著節拍跳動！
+                </p>
+                <div class="space-y-1.5 text-[11px]">
+                    <div class="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex justify-between items-center">
+                        <div>
+                            <div class="font-extrabold">🎤 Gummy B《石橋》</div>
+                            <div class="text-sub">最愛它神級的押韻結構與真摯文字</div>
+                        </div>
+                        <span class="text-xs font-black text-emerald-600">TOP 1</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-black/5 flex justify-between items-center">
+                        <div>
+                            <div class="font-extrabold">🌙 高爾宣 OSN《Without You》</div>
+                            <div class="text-sub">夜晚騎車與寫扣必聽的經典神曲</div>
+                        </div>
+                        <span class="text-xs font-bold text-sub">CLASSIC</span>
+                    </div>
+                    <div class="p-2.5 rounded-xl bg-black/5 flex justify-between items-center">
+                        <div>
+                            <div class="font-extrabold">😎 《慣老闆》</div>
+                            <div class="text-sub">舒壓放鬆、轉換心情專用律動</div>
+                        </div>
+                        <span class="text-xs font-bold text-sub">CHILL</span>
+                    </div>
+                </div>
+                <div class="p-3 rounded-2xl bg-black/5 space-y-2.5">
+                    <div class="flex items-center justify-between text-xs font-extrabold">
+                        <span>🎧 營火 Lo-Fi Groovebox</span>
+                        <span id="lofi-status" class="text-[11px] ${sound.lofiPlaying ? 'text-emerald-500' : 'text-sub'}">${sound.lofiPlaying ? '● 播放中' : '○ 已暫停'}</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button id="btn-lofi-toggle" class="flex-1 py-2.5 rounded-xl font-black text-xs text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:brightness-110 active:scale-95 transition">
+                            ${sound.lofiPlaying ? '⏸️ 暫停節奏' : '▶️ 播放 Lo-Fi 節奏'}
+                        </button>
+                        <button id="btn-lofi-style" class="px-3 py-2.5 rounded-xl font-bold text-xs bg-black/10 hover:bg-black/20 transition">
+                            🎛️ 切換和弦
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('btn-lofi-toggle').onclick = () => {
+                const playing = sound.toggleLoFi();
+                document.getElementById('btn-lofi-toggle').textContent = playing ? '⏸️ 暫停節奏' : '▶️ 播放 Lo-Fi 節奏';
+                document.getElementById('lofi-status').textContent = playing ? '● 播放中' : '○ 已暫停';
+                document.getElementById('lofi-status').className = `text-[11px] ${playing ? 'text-emerald-500' : 'text-sub'}`;
+                if (playing) unlockEgg('lofi', '🎧 石橋營火 Lo-Fi 啟動！看 3D 音柱跟著節拍跳動！');
+            };
+            document.getElementById('btn-lofi-style').onclick = () => {
+                sound.lofiStyle = sound.lofiStyle === 'stonebridge' ? 'withoutyou' : 'stonebridge';
+                showToast('🎛️', sound.lofiStyle === 'stonebridge' ? '切換至：石橋・Boom-Bap 和弦' : '切換至：夜色微醺・Jazz 和弦');
+            };
+        }
+
+        // 6. 整張財富燈塔：5分K ETF 模擬戰情室
+        function renderLighthouseDrawer(body) {
+            body.innerHTML = `
+                <p class="leading-relaxed text-xs">
+                    堅持台股 ETF 投資原則：<strong>「買整張（1,000股）不買零股」</strong>，觀察 <strong>5 分 K 走勢</strong>找尋理想進場點，長期累積穩定現金流！
+                </p>
+                <div class="flex gap-1.5">
+                    ${Object.keys(ETF_DATA).map(code => `
+                        <button data-etf="${code}" class="etf-tab flex-1 py-1.5 rounded-xl text-[11px] font-black transition ${code === activeEtfCode ? 'bg-red-500 text-white shadow-sm' : 'bg-black/5 hover:bg-black/10'}">${code}</button>
+                    `).join('')}
+                </div>
+                <div class="p-3 rounded-2xl bg-slate-900 text-white space-y-2">
+                    <div class="flex justify-between items-baseline">
+                        <div>
+                            <span id="etf-code-lbl" class="font-black text-sm">${activeEtfCode}</span>
+                            <span id="etf-name-lbl" class="text-[11px] text-slate-400 ml-1">${ETF_DATA[activeEtfCode].name}</span>
+                        </div>
+                        <div class="text-right">
+                            <span id="etf-price-lbl" class="text-base font-black text-red-400">${ETF_DATA[activeEtfCode].price.toFixed(2)}</span>
+                            <span class="text-[10px] text-slate-400 ml-1">5分K</span>
+                        </div>
+                    </div>
+                    <canvas id="kline-canvas" width="340" height="128" class="w-full h-32 rounded-xl bg-slate-950 block"></canvas>
+                </div>
+                <div class="grid grid-cols-3 gap-1.5 text-center text-[11px]">
+                    <div class="p-2 rounded-xl bg-black/5">
+                        <div class="text-sub">持有整張</div>
+                        <div id="etf-hold" class="font-black text-sm mt-0.5">${ETF_DATA[activeEtfCode].holdings} 張</div>
+                    </div>
+                    <div class="p-2 rounded-xl bg-black/5">
+                        <div class="text-sub">可用資金</div>
+                        <div id="etf-cash" class="font-black text-sm mt-0.5">$${Math.round(etfCash / 1000)}K</div>
+                    </div>
+                    <div class="p-2 rounded-xl bg-black/5">
+                        <div class="text-sub">預估年息</div>
+                        <div id="etf-div" class="font-black text-sm text-emerald-600 mt-0.5">$0</div>
+                    </div>
+                </div>
+                <button id="btn-buy-etf" class="w-full py-2.5 rounded-xl font-black text-xs text-white bg-gradient-to-r from-red-500 to-rose-600 hover:brightness-110 active:scale-95 transition shadow-md">
+                    📈 買進 1 張 (1,000股) · 約 $${Math.round(ETF_DATA[activeEtfCode].price * 1000).toLocaleString()}
+                </button>
+            `;
+
+            body.querySelectorAll('.etf-tab').forEach(btn => {
+                btn.onclick = () => {
+                    activeEtfCode = btn.dataset.etf;
+                    renderLighthouseDrawer(body);
+                };
+            });
+
+            document.getElementById('btn-buy-etf').onclick = () => {
+                const etf = ETF_DATA[activeEtfCode];
+                const cost = etf.price * 1000;
+                if (etfCash < cost) {
+                    showToast('💰', '模擬帳戶資金不足，已自動幫你補發 $300,000 家教獎金！');
+                    etfCash += 300000;
+                }
+                etfCash -= cost;
+                const totalVal = etf.holdings * etf.avgCost + etf.price;
+                etf.holdings += 1;
+                etf.avgCost = totalVal / etf.holdings;
+                updateEtfUI();
+                unlockEgg('etf', `📈 成功買進 1 張 ${activeEtfCode}！堅持買整張累積複利！`);
+            };
+
+            updateEtfUI();
+            drawKLineCanvas();
+        }
+
+        function updateEtfUI() {
+            const etf = ETF_DATA[activeEtfCode];
+            const holdEl = document.getElementById('etf-hold');
+            if (!holdEl) return;
+            holdEl.textContent = `${etf.holdings} 張`;
+            document.getElementById('etf-cash').textContent = `$${Math.round(etfCash / 1000)}K`;
+            document.getElementById('etf-price-lbl').textContent = etf.price.toFixed(2);
+            document.getElementById('btn-buy-etf').textContent = `📈 買進 1 張 (1,000股) · 約 $${Math.round(etf.price * 1000).toLocaleString()}`;
+            let totalDiv = 0;
+            Object.values(ETF_DATA).forEach(e => { totalDiv += e.holdings * 1000 * e.price * e.yieldRate; });
+            document.getElementById('etf-div').textContent = `$${Math.round(totalDiv).toLocaleString()}`;
+        }
+
+        function drawKLineCanvas() {
+            const canvas = document.getElementById('kline-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            // 背景微網格
+            ctx.strokeStyle = 'rgba(148,163,184,0.12)';
+            ctx.lineWidth = 1;
+            for (let y = 24; y < h; y += 28) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+            const candles = ETF_DATA[activeEtfCode].candles;
+            let minP = Infinity, maxP = -Infinity;
+            candles.forEach(c => { if (c.low < minP) minP = c.low; if (c.high > maxP) maxP = c.high; });
+            const pad = (maxP - minP) * 0.15 || 0.2;
+            minP -= pad; maxP += pad;
+
+            const toY = (p) => h - 10 - ((p - minP) / (maxP - minP)) * (h - 20);
+            const step = (w - 20) / candles.length;
+
+            // 繪製 K 棒（紅漲綠跌）
+            candles.forEach((c, i) => {
+                const x = 12 + i * step + step * 0.5;
+                const up = c.close >= c.open;
+                ctx.strokeStyle = up ? '#ef4444' : '#22c55e';
+                ctx.fillStyle = up ? '#ef4444' : '#22c55e';
+                ctx.beginPath();
+                ctx.moveTo(x, toY(c.high));
+                ctx.lineTo(x, toY(c.low));
+                ctx.stroke();
+
+                const y1 = toY(c.open), y2 = toY(c.close);
+                ctx.fillRect(x - step * 0.3, Math.min(y1, y2), step * 0.6, Math.max(2, Math.abs(y2 - y1)));
+            });
+
+            // 繪製 MA5 黃色均線
+            ctx.strokeStyle = '#facc15';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            candles.forEach((_, i) => {
+                if (i < 4) return;
+                let sum = 0;
+                for (let j = 0; j < 5; j++) sum += candles[i - j].close;
+                const x = 12 + i * step + step * 0.5;
+                const y = toY(sum / 5);
+                if (i === 4) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+        }
+
+        // 每 1.5 秒模擬 5 分 K 即時跳動
+        setInterval(() => {
+            Object.values(ETF_DATA).forEach(etf => {
+                const last = etf.candles[etf.candles.length - 1];
+                const open = last.close;
+                const delta = (Math.random() - 0.48) * (etf.price * 0.006);
+                const close = +(open + delta).toFixed(2);
+                const high = +(Math.max(open, close) + Math.random() * 0.08).toFixed(2);
+                const low = +(Math.min(open, close) - Math.random() * 0.08).toFixed(2);
+                etf.candles.shift();
+                etf.candles.push({ open, close, high, low });
+                etf.price = close;
+            });
+            if (openDrawerZone === 'lighthouse') {
+                updateEtfUI();
+                drawKLineCanvas();
+            }
+        }, 1600);
+
+        // =========================================================================
+        // 13. 粒子特效生成器（音符、衝刺灰塵、進球/空投金色爆發）
+        // =========================================================================
+        function spawn3DMusicNote() {
+            const cols = [0x38bdf8, 0xfde047, 0xf472b6, 0x34d399];
+            const mesh = new THREE.Mesh(
+                new THREE.OctahedronGeometry(0.18, 0),
+                new THREE.MeshBasicMaterial({ color: cols[Math.floor(Math.random() * cols.length)], transparent: true, opacity: 1 })
+            );
+            mesh.position.set((Math.random() - 0.5) * 2.2, 3.2, 27.6 + (Math.random() - 0.5) * 1.8);
+            mesh.userData = { life: 0, vx: (Math.random() - 0.5) * 0.6 };
+            noteParticles.push(mesh);
+            scene.add(mesh);
+        }
+
+        function spawnDustPuff(pos) {
+            const p = new THREE.Mesh(
+                new THREE.DodecahedronGeometry(0.16, 0),
+                new THREE.MeshBasicMaterial({ color: 0xfef3c7, transparent: true, opacity: 0.65 })
+            );
+            p.position.set(pos.x + (Math.random() - 0.5) * 0.4, pos.y + 0.15, pos.z + (Math.random() - 0.5) * 0.4);
+            p.userData = { life: 0 };
+            dustPuffs.push(p);
+            scene.add(p);
+        }
+
+        function spawnBurstParticles(origin, colorHex) {
+            for (let i = 0; i < 18; i++) {
+                const p = new THREE.Mesh(
+                    new THREE.OctahedronGeometry(0.14, 0),
+                    new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 1 })
+                );
+                p.position.copy(origin);
+                p.userData = {
+                    life: 0,
+                    vel: new THREE.Vector3((Math.random() - 0.5) * 6, 3 + Math.random() * 4.5, (Math.random() - 0.5) * 6)
+                };
+                burstParticles.push(p);
+                scene.add(p);
+            }
+        }
+
+        // =========================================================================
+        // 14. 快速傳送、大氣切換、自動導覽與小地圖繪製
+        // =========================================================================
+        function fastTravelTo(zoneId, openPanel = true) {
+            const z = ZONES[zoneId];
+            if (!z) return;
+            if (autoTourActive) toggleAutoTour(false);
+            autoWalkTarget = null;
+            playerPos.copy(z.standPos);
+            const surf = getWalkSurface(playerPos.x, playerPos.z);
+            playerPos.y = surf.y;
+            playerVelY = 0;
+
+            // 讓主角面向地標
+            playerRotY = Math.atan2(z.pos.x - playerPos.x, z.pos.z - playerPos.z);
+            // 平滑設定攝影機到最佳構圖點
+            controls.target.set(playerPos.x, playerPos.y + 1.4, playerPos.z);
+            camera.position.lerp(z.tourCam, 0.72);
+            controls.update();
+
+            if (openPanel) openLandmarkDrawer(zoneId);
+            showToast(z.icon, `已傳送至【${z.name}】`);
+        }
+
+        function setAtmosphere(key) {
+            if (!ATMOSPHERES[key]) return;
+            currentAtmKey = key;
+            const atm = ATMOSPHERES[key];
+            document.body.classList.toggle('night-ui', atm.nightUI);
+
+            document.querySelectorAll('.atm-btn').forEach(btn => {
+                if (btn.dataset.atm === key) {
+                    btn.className = 'atm-btn px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm';
+                } else {
+                    btn.className = 'atm-btn px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition hover:bg-black/5';
+                }
+            });
+            showToast('🌤️', `大氣光影切換為：${atm.name}`);
+        }
+
+        function toggleAutoTour(force) {
+            autoTourActive = typeof force === 'boolean' ? force : !autoTourActive;
+            const btnText = document.getElementById('tour-btn-text');
+            const caption = document.getElementById('tour-caption');
+            if (autoTourActive) {
+                closeLandmarkDrawer();
+                tourIndex = 0;
+                tourTimer = 0;
+                btnText.textContent = '停止導覽';
+                caption.style.opacity = '1';
+                updateTourCaption();
+                showToast('🎬', '開啟電影級自動導覽模式（適合課堂展示）');
+            } else {
+                btnText.textContent = '自動導覽';
+                caption.style.opacity = '0';
+            }
+        }
+
+        function updateTourCaption() {
+            const z = ZONES[tourKeys[tourIndex]];
+            document.getElementById('tour-caption-title').textContent = `STOP ${tourIndex + 1} / 6 · ${z.icon} ${z.name}`;
+            document.getElementById('tour-caption-text').textContent = z.caption;
+        }
+
+        // 2D 圓形雷達小地圖繪製
+        function drawMiniMap() {
+            const canvas = document.getElementById('minimap-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width, h = canvas.height, cx = w / 2, cy = h / 2;
+            const scale = 1.82;
+
+            ctx.clearRect(0, 0, w, h);
+            // 海洋底色
+            ctx.fillStyle = currentAtmKey === 'night' ? '#0b2545' : '#2694b8';
+            ctx.fillRect(0, 0, w, h);
+
+            // 島嶼輪廓
+            ctx.beginPath();
+            for (let a = 0; a <= Math.PI * 2 + 0.1; a += 0.12) {
+                const r = islandCoastRadius(a) * scale;
+                const px = cx + Math.cos(a) * r;
+                const py = cy + Math.sin(a) * r;
+                if (a === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fillStyle = currentAtmKey === 'night' ? '#2c5e42' : '#63b868';
+            ctx.fill();
+            ctx.strokeStyle = '#f2d6a2';
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // 瀉湖與棧道
+            ctx.fillStyle = currentAtmKey === 'night' ? '#0f3460' : '#32b8d4';
+            ctx.beginPath();
+            ctx.ellipse(cx + 12.6 * scale, cy + 2 * scale, 5.5, 14, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#a87c52';
+            ctx.fillRect(cx - 4, cy + 16 * scale, 8, 26);
+
+            // 6 大地標彩色亮點
+            Object.values(ZONES).forEach(z => {
+                const zx = cx + z.pos.x * scale;
+                const zy = cy + z.pos.z * scale;
+                ctx.beginPath();
+                ctx.arc(zx, zy, 5, 0, Math.PI * 2);
+                ctx.fillStyle = z.color;
+                ctx.fill();
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.6;
+                ctx.stroke();
+            });
+
+            // 主角即時方向箭頭
+            const px = cx + playerPos.x * scale;
+            const py = cy + playerPos.z * scale;
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(-playerRotY + Math.PI);
+            ctx.beginPath();
+            ctx.moveTo(0, -6.5);
+            ctx.lineTo(4.5, 5);
+            ctx.lineTo(0, 2.5);
+            ctx.lineTo(-4.5, 5);
+            ctx.closePath();
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.strokeStyle = '#ea580c';
+            ctx.lineWidth = 1.4;
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // =========================================================================
+        // 15. 事件監聽綁定
+        // =========================================================================
+        function bindAllEvents() {
+            // 進入世界按鈕
+            document.getElementById('btn-enter-world').onclick = () => {
+                sound.init();
+                sound.playChime();
+                document.getElementById('welcome-overlay').classList.add('hidden-screen');
+                showToast('🏝️', '歡迎來到承昊的 3D 世界！自由探索或點下方快捷傳送');
+            };
+
+            // 天氣按鈕
+            document.querySelectorAll('.atm-btn').forEach(btn => {
+                btn.onclick = () => setAtmosphere(btn.dataset.atm);
+            });
+
+            // 快速傳送 Dock
+            document.querySelectorAll('.dock-btn').forEach(btn => {
+                btn.onclick = () => fastTravelTo(btn.dataset.zone, true);
+            });
+
+            // 抽屜關閉、自動導覽、彩蛋清單、音效、隱藏 HUD
+            document.getElementById('btn-close-drawer').onclick = closeLandmarkDrawer;
+            document.getElementById('btn-auto-tour').onclick = () => toggleAutoTour();
+            document.getElementById('btn-quest-toggle').onclick = () => {
+                document.getElementById('quest-popover').classList.toggle('hidden');
+            };
+            document.getElementById('btn-mute').onclick = () => {
+                sound.muted = !sound.muted;
+                document.getElementById('btn-mute').textContent = sound.muted ? '🔇' : '🔊';
+                showToast(sound.muted ? '🔇' : '🔊', sound.muted ? '音效已靜音' : '音效已開啟');
+            };
+            document.getElementById('btn-hide-hud').onclick = () => {
+                document.body.classList.add('hud-hidden');
+                document.getElementById('btn-show-hud').classList.remove('hidden');
+            };
+            document.getElementById('btn-show-hud').onclick = () => {
+                document.body.classList.remove('hud-hidden');
+                document.getElementById('btn-show-hud').classList.add('hidden');
+            };
+            document.getElementById('proximity-pill').onclick = () => {
+                if (currentNearZone) openLandmarkDrawer(currentNearZone);
+            };
+
+            // 點擊小地圖地標快速傳送
+            document.getElementById('minimap-canvas').addEventListener('click', (e) => {
+                const rect = e.target.getBoundingClientRect();
+                const mx = (e.clientX - rect.left - rect.width / 2) / 1.82;
+                const mz = (e.clientY - rect.top - rect.height / 2) / 1.82;
+                let best = null, bestD = 999;
+                Object.values(ZONES).forEach(z => {
+                    const d = Math.hypot(z.pos.x - mx, z.pos.z - mz);
+                    if (d < bestD) { bestD = d; best = z.id; }
+                });
+                if (best && bestD < 12) fastTravelTo(best, true);
+            });
+
+            // 鍵盤控制（移動 + 跳躍 + 互動 E + 鋼琴鍵盤支援）
+            window.addEventListener('keydown', (e) => {
+                // 如果海濱鋼琴抽屜開啟，支援直接彈琴
+                if (openDrawerZone === 'piano' && !e.repeat) {
+                    const kChar = e.key.toUpperCase();
+                    const found = PIANO_KEYS.find(p => p.key === kChar);
+                    if (found) {
+                        triggerPianoKey(found);
+                        return;
+                    }
+                }
+                keys[e.code] = true;
+                if (e.code === 'Space' && isGrounded) {
+                    playerVelY = 7.4;
+                    isGrounded = false;
+                }
+                if (e.code === 'KeyE' && currentNearZone) {
+                    openLandmarkDrawer(currentNearZone);
+                }
+                if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+                    autoWalkTarget = null;
+                    if (autoTourActive) toggleAutoTour(false);
+                }
+            });
+            window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+            // 滑鼠點擊地面行走 / 點擊彩蛋物體
+            const dom = renderer.domElement;
+            dom.addEventListener('pointerdown', (e) => {
+                pointerDownPos = { x: e.clientX, y: e.clientY };
+            });
+            dom.addEventListener('pointerup', (e) => {
+                const moveDist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+                if (moveDist > 6) return; // 拖曳視角不觸發點地移動
+
+                pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+                pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(pointer, camera);
+
+                // 先檢查是否點到彩蛋物件（空投箱、通勤機車）
+                const eggHits = raycaster.intersectObjects([airdropCrateGroup, scooterGroup], true);
+                if (eggHits.length > 0) {
+                    const type = eggHits[0].object.userData.interactable;
+                    if (type === 'airdrop') { lootAirdrop(); return; }
+                    if (type === 'scooter') {
+                        sound.playBounce();
+                        unlockEgg('scooter', '🛵 點擊通勤機車！30 分鐘台中鋼琴家教出發！');
+                        return;
+                    }
+                }
+
+                // 點地自動行走
+                const groundHits = raycaster.intersectObjects(walkRayMeshes, false);
+                if (groundHits.length > 0) {
+                    const pt = groundHits[0].point;
+                    const surf = getWalkSurface(pt.x, pt.z);
+                    if (surf.walkable) {
+                        if (autoTourActive) toggleAutoTour(false);
+                        autoWalkTarget = new THREE.Vector3(pt.x, surf.y, pt.z);
+                        clickRippleMesh.position.set(pt.x, surf.y + 0.08, pt.z);
+                        clickRippleTime = 0;
+                    }
+                }
+            });
+
+            // 行動端虛擬搖桿與跳躍
+            const joy = document.getElementById('mobile-joystick');
+            const knob = document.getElementById('joystick-knob');
+            let joyActive = false;
+            const handleJoy = (touch) => {
+                const rect = joy.getBoundingClientRect();
+                const dx = touch.clientX - (rect.left + rect.width / 2);
+                const dy = touch.clientY - (rect.top + rect.height / 2);
+                const maxR = 34;
+                const d = Math.min(maxR, Math.hypot(dx, dy));
+                const ang = Math.atan2(dy, dx);
+                knob.style.transform = `translate(calc(-50% + ${Math.cos(ang) * d}px), calc(-50% + ${Math.sin(ang) * d}px))`;
+                mobileInput.x = (Math.cos(ang) * d) / maxR;
+                mobileInput.y = (Math.sin(ang) * d) / maxR;
+                autoWalkTarget = null;
+            };
+            joy.addEventListener('touchstart', (e) => { joyActive = true; handleJoy(e.touches[0]); }, { passive: true });
+            joy.addEventListener('touchmove', (e) => { if (joyActive) handleJoy(e.touches[0]); }, { passive: true });
+            joy.addEventListener('touchend', () => {
+                joyActive = false;
+                knob.style.transform = 'translate(-50%, -50%)';
+                mobileInput.x = 0; mobileInput.y = 0;
+            });
+            document.getElementById('btn-mobile-jump').onclick = () => {
+                if (isGrounded) { playerVelY = 7.4; isGrounded = false; }
+            };
+
+            // 視窗縮放響應
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // =========================================================================
+        // 16. 主動畫迴圈（60fps 物理、Shader、運鏡與粒子更新）
+        // =========================================================================
+        let dustTimer = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.05);
+            const elapsed = clock.getElapsedTime();
+
+            // 1. 大氣光影平滑插值過渡
+            const targetAtm = ATMOSPHERES[currentAtmKey];
+            skyUniforms.uTime.value = elapsed;
+            skyUniforms.uTopColor.value.lerp(targetAtm.top, 0.04);
+            skyUniforms.uMidColor.value.lerp(targetAtm.mid, 0.04);
+            skyUniforms.uHorizonColor.value.lerp(targetAtm.horizon, 0.04);
+            skyUniforms.uSunColor.value.lerp(targetAtm.sunColor, 0.04);
+            skyUniforms.uSunDir.value.lerp(targetAtm.sunDir, 0.04).normalize();
+            skyUniforms.uStarIntensity.value += (targetAtm.starIntensity - skyUniforms.uStarIntensity.value) * 0.04;
+
+            oceanUniforms.uTime.value = elapsed;
+            oceanUniforms.uShallowColor.value.lerp(targetAtm.oceanShallow, 0.04);
+            oceanUniforms.uDeepColor.value.lerp(targetAtm.oceanDeep, 0.04);
+            oceanUniforms.uSunColor.value.lerp(targetAtm.sunColor, 0.04);
+            oceanUniforms.uSunDir.value.copy(skyUniforms.uSunDir.value);
+            oceanUniforms.uFogColor.value.lerp(targetAtm.fogColor, 0.04);
+            oceanUniforms.uFogDensity.value += (targetAtm.fogDensity - oceanUniforms.uFogDensity.value) * 0.04;
+
+            scene.fog.color.lerp(targetAtm.fogColor, 0.04);
+            scene.fog.density = oceanUniforms.uFogDensity.value;
+
+            sunLight.color.lerp(targetAtm.sunColor, 0.04);
+            sunLight.intensity += (targetAtm.sunIntensity - sunLight.intensity) * 0.04;
+            sunLight.position.copy(skyUniforms.uSunDir.value).multiplyScalar(70);
+
+            hemiLight.color.lerp(targetAtm.hemiSky, 0.04);
+            hemiLight.groundColor.lerp(targetAtm.hemiGround, 0.04);
+            hemiLight.intensity += (targetAtm.hemiIntensity - hemiLight.intensity) * 0.04;
+
+            pointLamps.forEach(l => {
+                l.intensity += (targetAtm.lampPower - l.intensity) * 0.05;
+            });
+            if (lighthouseBeamMat) {
+                lighthouseBeamMat.opacity += (targetAtm.lighthouseBeam * 0.24 - lighthouseBeamMat.opacity) * 0.05;
+            }
+            ambientParticlesMesh.material.color.lerp(new THREE.Color(targetAtm.particleColor), 0.04);
+
+            // 2. 主角移動、衝刺、跳躍與地形貼合
+            const prevPos = playerPos.clone();
+            let inX = mobileInput.x, inZ = mobileInput.y;
+            if (openDrawerZone !== 'piano') {
+                if (keys['KeyW'] || keys['ArrowUp']) inZ -= 1;
+                if (keys['KeyS'] || keys['ArrowDown']) inZ += 1;
+                if (keys['KeyA'] || keys['ArrowLeft']) inX -= 1;
+                if (keys['KeyD'] || keys['ArrowRight']) inX += 1;
+            }
+
+            const isSprinting = !!(keys['ShiftLeft'] || keys['ShiftRight']);
+            const moveSpeed = isSprinting ? 11.2 : 7.0;
+            let moving = false;
+
+            if (Math.abs(inX) > 0.05 || Math.abs(inZ) > 0.05) {
+                moving = true;
+                const camForward = new THREE.Vector3();
+                camera.getWorldDirection(camForward);
+                camForward.y = 0;
+                camForward.normalize();
+                const camRight = new THREE.Vector3().crossVectors(camForward, new THREE.Vector3(0, 1, 0)).normalize();
+
+                const dir = new THREE.Vector3()
+                    .addScaledVector(camRight, inX)
+                    .addScaledVector(camForward, -inZ)
+                    .normalize();
+
+                const nx = playerPos.x + dir.x * moveSpeed * dt;
+                const nz = playerPos.z + dir.z * moveSpeed * dt;
+                const surf = getWalkSurface(nx, nz);
+                if (surf.walkable) {
+                    playerPos.x = nx;
+                    playerPos.z = nz;
+                }
+                const targetAngle = Math.atan2(dir.x, dir.z);
+                let diff = targetAngle - playerRotY;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                playerRotY += diff * 0.2;
+            } else if (autoWalkTarget) {
+                const dx = autoWalkTarget.x - playerPos.x;
+                const dz = autoWalkTarget.z - playerPos.z;
+                const dist = Math.hypot(dx, dz);
+                if (dist > 0.35) {
+                    moving = true;
+                    const nx = playerPos.x + (dx / dist) * 8.2 * dt;
+                    const nz = playerPos.z + (dz / dist) * 8.2 * dt;
+                    if (getWalkSurface(nx, nz).walkable) {
+                        playerPos.x = nx; playerPos.z = nz;
+                        playerRotY = Math.atan2(dx, dz);
+                    } else {
+                        autoWalkTarget = null;
+                    }
+                } else {
+                    autoWalkTarget = null;
+                }
+            }
+
+            // 垂直跳躍重力物理
+            const currentGround = getWalkSurface(playerPos.x, playerPos.z).y;
+            if (!isGrounded || playerPos.y > currentGround + 0.08) {
+                playerVelY -= 20.0 * dt;
+                playerPos.y += playerVelY * dt;
+                if (playerPos.y <= currentGround) {
+                    playerPos.y = currentGround;
+                    playerVelY = 0;
+                    isGrounded = true;
+                }
+            } else {
+                playerPos.y += (currentGround - playerPos.y) * 0.35;
+                isGrounded = true;
+            }
+
+            // 套用主角位置與走路/跑步擺動動畫
+            playerGroup.position.copy(playerPos);
+            playerGroup.rotation.y = playerRotY;
+            if (moving && isGrounded) {
+                const freq = isSprinting ? 15 : 10.5;
+                const cyc = elapsed * freq;
+                playerRig.bodyContainer.position.y = Math.abs(Math.sin(cyc)) * (isSprinting ? 0.2 : 0.12);
+                playerRig.legL.rotation.x = Math.sin(cyc) * 0.72;
+                playerRig.legR.rotation.x = -Math.sin(cyc) * 0.72;
+                playerRig.armL.rotation.x = -Math.sin(cyc) * 0.6;
+                playerRig.armR.rotation.x = Math.sin(cyc) * 0.6;
+                dustTimer += dt;
+                if (isSprinting && dustTimer > 0.12) {
+                    dustTimer = 0;
+                    spawnDustPuff(playerPos);
+                }
+            } else {
+                playerRig.bodyContainer.position.y *= 0.85;
+                playerRig.legL.rotation.x *= 0.82;
+                playerRig.legR.rotation.x *= 0.82;
+                playerRig.armL.rotation.x *= 0.82;
+                playerRig.armR.rotation.x *= 0.82;
+            }
+
+            // 3. 攝影機運鏡（自動電影導覽 OR 跟隨主角 OrbitControls）
+            if (autoTourActive) {
+                tourTimer += dt;
+                if (tourTimer > 6.5) {
+                    tourTimer = 0;
+                    tourIndex = (tourIndex + 1) % tourKeys.length;
+                    updateTourCaption();
+                }
+                const z = ZONES[tourKeys[tourIndex]];
+                const orbitAngle = elapsed * 0.18;
+                const desiredCam = z.tourCam.clone().add(new THREE.Vector3(Math.sin(orbitAngle) * 2.5, 0, Math.cos(orbitAngle) * 2.5));
+                camera.position.lerp(desiredCam, 0.025);
+                const lookTarget = z.pos.clone().add(new THREE.Vector3(0, 1.8, 0));
+                controls.target.lerp(lookTarget, 0.04);
+                camera.lookAt(controls.target);
+            } else {
+                // 將 OrbitControls 目標與攝影機同步平移主角的位移量
+                const deltaMove = playerPos.clone().sub(prevPos);
+                camera.position.add(deltaMove);
+                controls.target.lerp(new THREE.Vector3(playerPos.x, playerPos.y + 1.45, playerPos.z), 0.16);
+                controls.update();
+            }
+
+            // 4. 地標靠近偵測與提示
+            let nearId = null;
+            Object.values(ZONES).forEach(z => {
+                if (Math.hypot(playerPos.x - z.pos.x, playerPos.z - z.pos.z) < z.radius) {
+                    nearId = z.id;
+                }
+            });
+            currentNearZone = nearId;
+            const proxPill = document.getElementById('proximity-pill');
+            if (nearId && openDrawerZone !== nearId && !autoTourActive) {
+                proxPill.classList.remove('hidden');
+                document.getElementById('proximity-text').textContent = `靠近【${ZONES[nearId].name}】按 E 或點擊進入互動`;
+            } else {
+                proxPill.classList.add('hidden');
+            }
+
+            // 5. 世界動態元素動畫
+            if (lighthouseBeamGroup) lighthouseBeamGroup.rotation.y += dt * 0.55;
+            if (vinylPlatter) vinylPlatter.rotation.y -= dt * (sound.lofiPlaying ? 2.8 : 0.6);
+            if (neuralNetGroup) {
+                neuralNetGroup.rotation.y += dt * 0.65;
+                neuralNetGroup.position.y = 2.25 + Math.sin(elapsed * 2.2) * 0.12;
+            }
+
+            // 石橋 3D 音頻等化器隨 Lo-Fi 節拍跳動
+            sound.beatEnergy *= 0.88;
+            eqBars.forEach(bar => {
+                const i = bar.userData.index;
+                const base = sound.lofiPlaying
+                    ? 0.55 + Math.abs(Math.sin(elapsed * 6.5 + i * 0.65)) * 1.4 + sound.beatEnergy * 1.15
+                    : 0.35 + Math.abs(Math.sin(elapsed * 1.6 + i * 0.5)) * 0.35;
+                bar.scale.y += (base - bar.scale.y) * 0.25;
+                bar.position.y = 0.25 + bar.scale.y * 0.5;
+            });
+
+            // 雲朵與樹木搖曳
+            clouds.forEach(c => {
+                c.position.x += c.userData.speed * dt;
+                if (c.position.x > 75) c.position.x = -75;
+            });
+            swayTrees.forEach(t => {
+                t.rotation.z = Math.sin(elapsed * 1.6 + t.userData.phase) * 0.032;
+            });
+
+            // 環境粒子（夕陽光塵 / 夜晚螢火蟲 / 櫻吹雪花瓣）
+            const apPos = ambientParticlesMesh.geometry.attributes.position;
+            const pMode = targetAtm.particleMode;
+            for (let i = 0; i < ambientParticlesData.length; i++) {
+                const p = ambientParticlesData[i];
+                if (pMode === 'petals') {
+                    p.x += (1.8 + p.speed) * dt;
+                    p.y -= (1.1 + p.speed * 0.5) * dt;
+                    p.z += Math.sin(elapsed * 2 + p.phase) * 0.6 * dt;
+                    if (p.y < 0.5) p.y = 20;
+                    if (p.x > 34) p.x = -34;
+                } else {
+                    p.y += Math.sin(elapsed * p.speed + p.phase) * 0.012;
+                    p.x += Math.cos(elapsed * 0.4 + p.phase) * 0.01;
+                }
+                apPos.setXYZ(i, p.x, p.y, p.z);
+            }
+            apPos.needsUpdate = true;
+
+            // 營火火花 & PUBG 紅色空投煙霧
+            emberParticles.forEach(f => {
+                const u = f.userData;
+                const cyc = (elapsed * u.speed + u.phase) % 1;
+                f.position.set(u.baseX + Math.sin(elapsed * 5 + u.phase) * 0.16, u.baseY + cyc * 1.5, u.baseZ + Math.cos(elapsed * 4 + u.phase) * 0.16);
+                f.scale.setScalar(1.0 - cyc * 0.8);
+            });
+            smokeParticles.forEach(sm => {
+                const u = sm.userData;
+                const cyc = ((elapsed * 0.48 + u.phase) % 1);
+                sm.position.set(u.baseX + Math.sin(elapsed * 2 + u.phase) * 0.35 + cyc * 0.9, u.baseY + cyc * 5.2, u.baseZ);
+                sm.scale.setScalar(0.5 + cyc * 1.9);
+                sm.material.opacity = (1 - cyc) * 0.52;
+            });
+
+            // 投籃力道條移動 & 3D 籃球拋物線物理
+            if (basketballState.running) {
+                basketballState.cursorPos += basketballState.cursorDir * dt * 118;
+                if (basketballState.cursorPos >= 96) { basketballState.cursorPos = 96; basketballState.cursorDir = -1; }
+                if (basketballState.cursorPos <= 4) { basketballState.cursorPos = 4; basketballState.cursorDir = 1; }
+                const cur = document.getElementById('bb-cursor');
+                if (cur) cur.style.left = basketballState.cursorPos + '%';
+            }
+            if (shotBallState.active) {
+                shotBallState.t += dt * 1.15;
+                const t = Math.min(1, shotBallState.t);
+                shotBallMesh.position.lerpVectors(shotBallState.start, shotBallState.target, t);
+                shotBallMesh.position.y += Math.sin(t * Math.PI) * 3.8;
+                shotBallMesh.rotation.x += dt * 9;
+                if (t >= 1) {
+                    shotBallState.active = false;
+                    if (shotBallState.willScore) {
+                        sound.playSwish();
+                        spawnBurstParticles(shotBallState.target, 0xfacc15);
+                        hoopNetMesh.scale.set(1.35, 0.75, 1.35);
+                        showToast('🔥', `空心入網！連進 ${basketballState.streak} 球！`);
+                        unlockEgg('basket', '🏀 夕陽球場空心入網！（已解鎖籃球彩蛋）');
+                    } else {
+                        sound.playBounce();
+                        showToast('🏀', '差一點點！抓準綠色甜蜜點再投一次！');
+                    }
+                    shotBallMesh.position.set(-17, 2.95, 1.5);
+                }
+            } else {
+                shotBallMesh.position.y = 2.8 + Math.abs(Math.sin(elapsed * 3.8)) * 0.95;
+            }
+            if (hoopNetMesh) hoopNetMesh.scale.lerp(new THREE.Vector3(1, 1, 1), 0.12);
+
+            // 點地漣漪、灰塵、音符與爆發粒子更新
+            if (clickRippleTime < 0.75) {
+                clickRippleTime += dt;
+                const k = clickRippleTime / 0.75;
+                clickRippleMesh.scale.setScalar(0.5 + k * 2.4);
+                clickRippleMesh.material.opacity = (1 - k) * 0.85;
+            } else {
+                clickRippleMesh.material.opacity = 0;
+            }
+
+            const updateSimpleParticles = (arr, maxLife, fn) => {
+                for (let i = arr.length - 1; i >= 0; i--) {
+                    const p = arr[i];
+                    p.userData.life += dt;
+                    fn(p, dt);
+                    if (p.userData.life >= maxLife) {
+                        scene.remove(p);
+                        arr.splice(i, 1);
+                    }
+                }
+            };
+            updateSimpleParticles(dustPuffs, 0.55, (p, d) => {
+                p.position.y += d * 0.9;
+                p.scale.multiplyScalar(1.03);
+                p.material.opacity = Math.max(0, 0.65 * (1 - p.userData.life / 0.55));
+            });
+            updateSimpleParticles(noteParticles, 2.0, (p, d) => {
+                p.position.y += d * 1.7;
+                p.position.x += p.userData.vx * d;
+                p.rotation.y += d * 3.5;
+                p.material.opacity = Math.max(0, 1 - p.userData.life / 2.0);
+            });
+            updateSimpleParticles(burstParticles, 1.1, (p, d) => {
+                p.userData.vel.y -= 12 * d;
+                p.position.addScaledVector(p.userData.vel, d);
+                p.material.opacity = Math.max(0, 1 - p.userData.life / 1.1);
+            });
+
+            // 6. 更新 3D 地標標籤投影與 2D 雷達小地圖
+            updateWorldPins();
+            drawMiniMap();
+
+            renderer.render(scene, camera);
+        }
+
+        function updateWorldPins() {
+            Object.values(ZONES).forEach(z => {
+                const el = document.getElementById('pin-' + z.id);
+                if (!el) return;
+                const p = z.pos.clone();
+                p.y += z.id === 'lighthouse' ? 11.4 : 4.8;
+                p.project(camera);
+                if (p.z > 1) {
+                    el.style.opacity = '0';
+                    el.style.pointerEvents = 'none';
+                } else {
+                    const x = (p.x * 0.5 + 0.5) * window.innerWidth;
+                    const y = (-p.y * 0.5 + 0.5) * window.innerHeight;
+                    el.style.left = x + 'px';
+                    el.style.top = y + 'px';
+                    const hide = openDrawerZone === z.id;
+                    el.style.opacity = hide ? '0' : '0.94';
+                    el.style.pointerEvents = hide ? 'none' : 'auto';
+                }
+            });
+        }
+
+        window.addEventListener('load', initWorld);
+    </script>
+</body>
+</html>
